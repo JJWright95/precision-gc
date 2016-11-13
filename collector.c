@@ -15,3 +15,7 @@ void mark(void *block) {
 void unmark(void *block) {
     *((long *) block) = *((long *) block) & 0xfffffffffffffffe;
 }
+
+int marked(void *block) {
+    return *((long *)block) & 1L;
+}
