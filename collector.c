@@ -19,3 +19,27 @@ void unmark(void *block) {
 int marked(void *block) {
     return *((long *)block) & 1L;
 }
+
+void sweep (void) {
+    printf("Commencing sweep...\n");
+    void *previous = usedHead;
+    void *current = usedHead;
+    void *next;
+    while (current != NULL && current != (void *) 1L) {
+        if (marked(current)) {
+            printf("Skipping marked block... \t Address: %p\n", current+sizeof(void*));
+            unmark(current);
+            next = (void *) *((long *) current);
+            previous = current;
+        } else {
+            next = (void *) *((long *) current);
+            if (usedHead == current) {
+                usedHead = next;
+            }
+            printf("Freeing unmarked block... \t Address: %p\n", current+sizeof(void*));
+            free(current);
+            *((long *) previous) = (long) next;
+        }
+        current = next;
+    } 
+}
