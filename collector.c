@@ -7,3 +7,11 @@ void* gc_malloc(size_t numBytes) {
     printf("Block allocated...\t Address: %p \t Size: %ld \n", (void *) addr+sizeof(void *), numBytes);
     return addr+sizeof(void *);
 }
+
+void mark(void *block) {
+    *((long *) block) = *((long *) block) | 0x1L;
+}
+
+void unmark(void *block) {
+    *((long *) block) = *((long *) block) & 0xfffffffffffffffe;
+}
