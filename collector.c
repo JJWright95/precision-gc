@@ -43,3 +43,19 @@ void sweep (void) {
         current = next;
     } 
 }
+
+void printHeap(void) {
+    void *current = usedHead;
+    printf("Allocated blocks...\n");
+    if (current == NULL) {
+        printf("Heap empty\n");
+    }
+    while (current != NULL) {
+        printf("Address: %p \t Marked: %d\n", current+sizeof(void*), marked(current));
+        if (marked(current)) {
+            current = (void *) (*((long *) current) & 0xfffffffffffffffe);
+        } else {
+            current = (void *) *((long *) current);
+        }
+    }
+}
