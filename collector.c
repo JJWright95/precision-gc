@@ -33,6 +33,46 @@ void *gc_malloc(size_t size) {
     return (char *) addr+2*PTR_SIZE;
 }
 
+void *gc_realloc(void *ptr, size_t size) {
+    if (ptr == NULL) {
+        return gc_malloc(size);
+    }
+    void *current = (char *) ptr-2*PTR_SIZE;
+    void *previous = (void *) *((long *) current);
+    void *next = (void *) *((long *) ((char *) current+PTR_SIZE));
+    // if size request is 0, free block
+    if (size == 0) {
+        printf("Realloc size request 0, freeing block...\t Address: %p\n", ptr);
+        if (next != NULL) {
+            *((long *) next) = (long) previous;
+        }
+        if (usedHead == current) {
+                usedHead = next;
+        }
+        *((long *) ((char *) previous+PTR_SIZE)) = (long) next;
+        free(current);
+        return NULL;
+    }
+    void *new = realloc(current, size+2*PTR_SIZE);
+    // if realloc failed, return NULL
+    if (new == NULL) {
+        printf("Realloc failure...\t Pointer: %p\t Size request: %ld\n", current, size+2*PTR_SIZE);
+        return NULL;
+    }
+    // if data was not moved simply return old pointer
+    if (current == new) {
+        printf("Block resized in place...\t Address: %p\t Size: %ld \t Previous: %p\t Next: %p\n",
+                (char *) current+2*PTR_SIZE, size, previous, next);
+        return (char *) current+2*PTR_SIZE;
+    }
+    // if get here, data has been moved. Update previous and next block pointers
+    *((long *) ((char *) previous+PTR_SIZE)) = (long) new;
+    *((long *) next) = (long) new;
+    printf("Block resized, moved to new location...\t Address: %p\t Size: %ld\t Previous: %p\t Next: %p\n",
+            (char *) new+2*PTR_SIZE, size, previous, next);
+    return (void *) ((char *) new+2*PTR_SIZE);
+}
+
 void sweep(void) {
     printf("Commencing sweep...\n");
     void *previous = usedHead;
