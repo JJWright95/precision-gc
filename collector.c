@@ -4,6 +4,18 @@
 const int PTR_SIZE = sizeof(void *);
 static void *usedHead = NULL;
 
+void markBlock(void *block) {
+    *((long *) block) = *((long *) block) | 0x1L;
+}
+
+void unmarkBlock(void *block) {
+    *((long *) block) = *((long *) block) & 0xfffffffffffffffe;
+}
+
+int marked(void *block) {
+    return *((long *) block) & 1L;
+}
+
 void *gc_malloc(size_t size) {
     void *addr = malloc(size+2*PTR_SIZE);
     if (addr == NULL) {
@@ -19,18 +31,6 @@ void *gc_malloc(size_t size) {
     printf("Block allocated...\t Address: %p \t Size: %ld \t Previous: %p \t Next: %p \n", 
             (char *) addr+2*PTR_SIZE, size, (void *) *((long *) addr), (void *) *((long *) ((char *) addr+PTR_SIZE)));
     return (char *) addr+2*PTR_SIZE;
-}
-
-void mark(void *block) {
-    *((long *) block) = *((long *) block) | 0x1L;
-}
-
-void unmark(void *block) {
-    *((long *) block) = *((long *) block) & 0xfffffffffffffffe;
-}
-
-int marked(void *block) {
-    return *((long *)block) & 1L;
 }
 
 void sweep(void) {
