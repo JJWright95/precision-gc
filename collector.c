@@ -1,11 +1,23 @@
+#include <stdio.h>
+#include <stdlib.h>
+
 static void *usedHead = NULL;
 
-void* gc_malloc(size_t numBytes) {
-    void* addr = malloc(numBytes+sizeof(void*));
-    *((long *) addr) = (long) usedHead;
-    usedHead = addr; 
-    printf("Block allocated...\t Address: %p \t Size: %ld \n", (void *) addr+sizeof(void *), numBytes);
-    return addr+sizeof(void *);
+void *gc_malloc(size_t size) {
+    void *addr = malloc(size+2*sizeof(void*));
+    if (addr == NULL) {
+        printf("Malloc failure...\t Size request: %ld", size+2*sizeof(void*));
+        return NULL;
+    }
+    *((long *) addr) = (long) &usedHead; // point previous pointer at address of usedHead
+    *((long *) ((char *) addr+sizeof(void*))) = (long) usedHead; // point next pointer at address of next block
+    if (usedHead != NULL) { 
+        *((long *) usedHead) = (long) addr; // point previous pointer of next block at new block
+    }
+    usedHead = addr; // new block at beginning of linked list
+    printf("Block allocated...\t Address: %p \t Size: %ld \t Previous: %p \t Next: %p \n", 
+            (char *) addr+2*sizeof(void*), size, (void *) *((long *) addr), (void *) *((long *) ((char *) addr+sizeof(void*))));
+    return (char *) addr+2*sizeof(void*);
 }
 
 void mark(void *block) {
