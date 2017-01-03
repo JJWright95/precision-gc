@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include "collector.h"
+#include "pointer_macros.h"
 
 #ifdef DEBUG
 #define DEBUG_TEST 1
@@ -14,11 +15,7 @@
 
 #define debug_print(...) do { if (DEBUG_TEST) fprintf(stderr, ##__VA_ARGS__); } while (0)
 
-const int POINTER_SIZE = sizeof(void *);
-static void *used_head = NULL;
-
-#define PREVIOUS_POINTER(BLOCK_ADDRESS) (*((void **) ((char *) BLOCK_ADDRESS+malloc_usable_size(BLOCK_ADDRESS)-2*POINTER_SIZE)))
-#define NEXT_POINTER(BLOCK_ADDRESS) (*((void **) ((char *) BLOCK_ADDRESS+malloc_usable_size(BLOCK_ADDRESS)-POINTER_SIZE)))
+void *used_head = NULL;
 
 /*
 gc_malloc memory block layout:
