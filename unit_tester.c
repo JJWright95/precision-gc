@@ -123,6 +123,65 @@ int test_unmark_block(void)
     }
 }
 
+int test_gc_realloc(void)
+{
+    printf("Testing \'gc_realloc\'...\n");
+    printf("Testing 'free'' on size request 0... ");
+    int chain_error = 0;
+    void *block1 = gc_malloc(40);
+    void *block2 = gc_malloc(40);
+    void *realloc1 = gc_realloc(block1, 0);
+    if (NEXT_POINTER(block2) != NULL) {
+        chain_error++;
+    }
+    if (realloc1 != NULL) {
+        chain_error++;
+    }
+    void *realloc2 = gc_realloc(block2, 0);
+    if (realloc2 != NULL) {
+        chain_error++;
+    }
+    if (used_head != NULL) {
+        chain_error++;
+    }
+    chain_error == 0 ? printf("passed.\n") : printf("failed.\n");
+    printf("Testing handling of unsatisfiable size request... ");
+    int size_error = 0;
+    block1 = gc_malloc(20);
+    block2 = gc_malloc(20);
+    realloc1 = gc_realloc(block1, 0xfffffffffffff);
+    if(realloc1 != NULL || block1 == NULL) {
+        size_error++;
+    }
+    size_error == 0 ? printf("passed.\n") : printf("failed.\n");
+    printf("Testing block resizing and relocation... ");
+    int relocation_error = 0;
+    realloc1 = gc_realloc(block1, 1200);
+    if (realloc1 == block1) {
+        if (PREVIOUS_POINTER(block1) != block2 || NEXT_POINTER(block1) != NULL) {
+            relocation_error++;
+        }
+    }
+    relocation_error == 0 ? printf("passed.\n") : printf("failed.\n");
+    printf("Testing in-place block resizing... ");
+    int resize_inplace_error = 0;
+    realloc2 = gc_realloc(block2, 24);
+    if (realloc2 != block2) {
+        if (PREVIOUS_POINTER(realloc2) != &used_head || NEXT_POINTER(realloc2) != realloc1) {
+            resize_inplace_error++;
+        }
+    }
+    free(realloc1);
+    free(realloc2);
+    resize_inplace_error == 0 ? printf("passed.\n") : printf("failed.\n");
+    if (chain_error+size_error+resize_inplace_error+relocation_error == 0) {
+        printf("Test complete: passed.\n\n");
+    } else {
+        printf("Test complete: failed.\n\n");
+    }
+    return chain_error+size_error+resize_inplace_error+relocation_error;
+}
+
 int main(void) 
 {
     int errors = 0;
@@ -130,6 +189,7 @@ int main(void)
     errors += test_marked();
     errors += test_mark_block();
     errors += test_unmark_block();
+    errors += test_gc_realloc();
     if (errors == 0) {
         printf("All unit tests completed sucessfully.\n");
     } else {
