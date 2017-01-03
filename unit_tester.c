@@ -59,12 +59,77 @@ int test_gc_malloc(void)
     return chain_error+input_error;
 }
 
+int test_marked(void) 
+{
+    printf("Testing \'marked\'...\n");
+    printf("Allocating block...\n");
+    void *block = gc_malloc(16);
+    printf("Verifying block unmarked...\n");
+    bool block_unmarked = marked(block);
+    printf("Marking block...\n");
+    PREVIOUS_POINTER(block) = (void *) ((uintptr_t) PREVIOUS_POINTER(block) | 0x1);
+    printf("Testing for presence of mark...\n");
+    bool block_marked = marked(block);
+    free(block);
+    used_head = NULL;
+    if (!block_unmarked && block_marked) {
+        printf("Test complete: passed.\n\n");
+        return 0;
+    } else {
+        printf("Test complete: failed.\n\n");
+        return 1;
+    }
+}
 
+int test_mark_block(void) 
+{
+    printf("Testing \'mark_block\'...\n");
+    printf("Allocating block...\n");
+    void *block = gc_malloc(16);
+    assert(!marked(block));
+    printf("Marking block...\n");
+    mark_block(block);
+    bool block_marked = marked(block);
+    free(block);
+    used_head = NULL;
+    if (block_marked) {
+        printf("Block marked successfully.\nTest complete: passed.\n\n");
+        return 0;
+    } else {
+        printf("Failed to mark block.\nTest complete: failed.\n\n");
+        return 1;
+    }
+}
+
+int test_unmark_block(void) 
+{
+    printf("Testing \'unmark_block\'...\n");
+    printf("Allocating block...\n");
+    void *block = gc_malloc(16);
+    assert(!marked(block));
+    printf("Marking block...\n");
+    mark_block(block);
+    printf("Unmarking block...\n");
+    unmark_block(block);
+    bool block_marked = marked(block);
+    free(block);
+    used_head = NULL;
+    if (!block_marked) {
+        printf("Mark removed successfully.\nTest complete: passed.\n\n");
+        return 0;
+    } else {
+        printf("Mark not removed.\nTest complete: failed.\n\n");
+        return 1;
+    }
+}
 
 int main(void) 
 {
     int errors = 0;
     errors += test_gc_malloc();
+    errors += test_marked();
+    errors += test_mark_block();
+    errors += test_unmark_block();
     if (errors == 0) {
         printf("All unit tests completed sucessfully.\n");
     } else {
