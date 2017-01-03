@@ -2,9 +2,22 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <stdarg.h>
+
+const bool DEBUG = false;
 
 const int POINTER_SIZE = sizeof(void *);
 static void *used_head = NULL;
+
+printf_debug(const char *format, ...)
+{
+    if (DEBUG) {
+        va_list args;
+        va_start(args, format);
+        vprintf(format, args);
+        va_end(args);
+    }
+}
 
 void mark_block(void *block) {
     *((long *) block) = *((long *) block) | 0x1L;
@@ -24,7 +37,7 @@ void *gc_malloc(size_t size) {
 
     void *block = malloc(size+2*POINTER_SIZE);
     if (block == NULL) {
-        printf("Malloc failure...\t Size request: %ld", size+2*POINTER_SIZE);
+        printf_debug("Malloc failure...\t Size request: %ld", size+2*POINTER_SIZE);
         return NULL;
     }
     *((long *) block) = (long) &used_head; // point previous pointer at address of used_head
@@ -33,7 +46,7 @@ void *gc_malloc(size_t size) {
         *((long *) used_head) = (long) block; // point previous pointer of next block at new block
     }
     used_head = block; // new block at beginning of linked list
-    printf("Block allocated...\t Address: %p \t Size: %ld \t Previous: %p \t Next: %p \n", 
+    printf_debug("Block allocated...\t Address: %p \t Size: %ld \t Previous: %p \t Next: %p \n", 
             (char *) block+2*POINTER_SIZE, size, (void *) *((long *) block), (void *) *((long *) ((char *) block+POINTER_SIZE)));
     return (char *) block+2*POINTER_SIZE;
 }
@@ -47,7 +60,7 @@ void *gc_realloc(void *ptr, size_t size) {
     void *next = (void *) *((long *) ((char *) current+POINTER_SIZE));
     // if size request is 0, free block
     if (size == 0) {
-        printf("Realloc size request 0, freeing block...\t Address: %p\n", ptr);
+        printf_debug("Realloc size request 0, freeing block...\t Address: %p\n", ptr);
         if (next != NULL) {
             *((long *) next) = (long) previous;
         }
@@ -63,31 +76,31 @@ void *gc_realloc(void *ptr, size_t size) {
     void *new = realloc(current, size+2*POINTER_SIZE);
     // if realloc failed, return NULL
     if (new == NULL) {
-        printf("Realloc failure...\t Pointer: %p\t Size request: %ld\n", current, size+2*POINTER_SIZE);
+        printf_debug("Realloc failure...\t Pointer: %p\t Size request: %ld\n", current, size+2*POINTER_SIZE);
         return NULL;
     }
     // if data was not moved simply return old pointer
     if (current == new) {
-        printf("Block resized in place...\t Address: %p\t Size: %ld \t Previous: %p\t Next: %p\n",
+        printf_debug("Block resized in place...\t Address: %p\t Size: %ld \t Previous: %p\t Next: %p\n",
                 (char *) current+2*POINTER_SIZE, size, previous, next);
         return (char *) current+2*POINTER_SIZE;
     }
     // if get here, data has been moved. Update previous and next block pointers
     *((long *) ((char *) previous+POINTER_SIZE)) = (long) new;
     *((long *) next) = (long) new;
-    printf("Block resized, moved to new location...\t Address: %p\t Size: %ld\t Previous: %p\t Next: %p\n",
+    printf_debug("Block resized, moved to new location...\t Address: %p\t Size: %ld\t Previous: %p\t Next: %p\n",
             (char *) new+2*POINTER_SIZE, size, previous, next);
     return (void *) ((char *) new+2*POINTER_SIZE);
 }
 
 void sweep(void) {
-    printf("Commencing sweep...\n");
+    printf_debug("Commencing sweep...\n");
     void *previous = used_head;
     void *current = used_head;
     void *next;
     while (current != NULL && current != (void *) 1L) {
         if (marked(current)) {
-            printf("Skipping marked block...\t Address: %p\n", (char *) current+2*POINTER_SIZE);
+            printf_debug("Skipping marked block...\t Address: %p\n", (char *) current+2*POINTER_SIZE);
             unmark_block(current);
             next = (void *) *((long *) ((char *) current+POINTER_SIZE));
             previous = current;
@@ -96,7 +109,7 @@ void sweep(void) {
             if (used_head == current) {
                 used_head = next;
             }
-            printf("Freeing unmarked block...\t Address: %p\n", (char *) current+2*POINTER_SIZE);
+            printf_debug("Freeing unmarked block...\t Address: %p\n", (char *) current+2*POINTER_SIZE);
             if (next != NULL && next != (void *) 1L) {
                 bool markPresent = marked(next); 
                 *((long *) next) = (long) previous;
