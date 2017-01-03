@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 const int PTR_SIZE = sizeof(void *);
 static void *usedHead = NULL;
@@ -12,7 +13,7 @@ void unmarkBlock(void *block) {
     *((long *) block) = *((long *) block) & 0xfffffffffffffffe;
 }
 
-int marked(void *block) {
+bool marked(void *block) {
     return *((long *) block) & 1L;
 }
 
@@ -91,7 +92,7 @@ void sweep(void) {
             }
             printf("Freeing unmarked block...\t Address: %p\n", (char *) current+2*PTR_SIZE);
             if (next != NULL && next != (void *) 1L) {
-                int markPresent = marked(next); 
+                bool markPresent = marked(next); 
                 *((long *) next) = (long) previous;
                 if (markPresent) {
                     markBlock(next);
