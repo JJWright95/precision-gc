@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <assert.h>
 
 const int POINTER_SIZE = sizeof(void *);
 static void *used_head = NULL;
@@ -18,6 +19,9 @@ bool marked(void *block) {
 }
 
 void *gc_malloc(size_t size) {
+    // abort if size+2*POINTER_SIZE causes overflow
+    assert(size < size+2*POINTER_SIZE);
+
     void *block = malloc(size+2*POINTER_SIZE);
     if (block == NULL) {
         printf("Malloc failure...\t Size request: %ld", size+2*POINTER_SIZE);
@@ -54,6 +58,8 @@ void *gc_realloc(void *ptr, size_t size) {
         free(current);
         return NULL;
     }
+    // request a new, larger block of memory. Abort if size+2*POINTER_SIZE causes overflow
+    assert(size < size+2*POINTER_SIZE);
     void *new = realloc(current, size+2*POINTER_SIZE);
     // if realloc failed, return NULL
     if (new == NULL) {
