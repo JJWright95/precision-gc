@@ -19,19 +19,23 @@ printf_debug(const char *format, ...)
     }
 }
 
-void mark_block(void *block) {
+void mark_block(void *block) 
+{
     *((long *) block) = *((long *) block) | 0x1L;
 }
 
-void unmark_block(void *block) {
+void unmark_block(void *block) 
+{
     *((long *) block) = *((long *) block) & 0xfffffffffffffffe;
 }
 
-bool marked(void *block) {
+bool marked(void *block) 
+{
     return *((long *) block) & 1L;
 }
 
-void *gc_malloc(size_t size) {
+void *gc_malloc(size_t size) 
+{
     // abort if size+2*POINTER_SIZE causes overflow
     assert(size < size+2*POINTER_SIZE);
 
@@ -51,7 +55,8 @@ void *gc_malloc(size_t size) {
     return (char *) block+2*POINTER_SIZE;
 }
 
-void *gc_realloc(void *ptr, size_t size) {
+void *gc_realloc(void *ptr, size_t size) 
+{
     if (ptr == NULL) {
         return gc_malloc(size);
     }
@@ -93,7 +98,8 @@ void *gc_realloc(void *ptr, size_t size) {
     return (void *) ((char *) new+2*POINTER_SIZE);
 }
 
-void sweep(void) {
+void sweep(void) 
+{
     printf_debug("Commencing sweep...\n");
     void *previous = used_head;
     void *current = used_head;
@@ -124,7 +130,8 @@ void sweep(void) {
     } 
 }
 
-void printHeap(void) {
+void printHeap(void) 
+{
     void *current = used_head;
     printf("Allocated blocks...\n");
     if (current == NULL) {
