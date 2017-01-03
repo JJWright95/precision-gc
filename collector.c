@@ -1,12 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
-#include <stdbool.h>
 #include <assert.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include "collector.h"
 
-const bool DEBUG = false;
+#ifdef DEBUG
+#define DEBUG_TEST 1
+#else
+#define DEBUG_TEST 0
+#endif
+
+#define debug_print(...) do { if (DEBUG_TEST) fprintf(stderr, ##__VA_ARGS__); } while (0)
 
 const int POINTER_SIZE = sizeof(void *);
 static void *used_head = NULL;
@@ -21,16 +27,6 @@ gc_malloc memory block layout:
 |          User data          | *previous |   *next   |
 +-----------------------------+-----------+-----------+
 */
-
-printf_debug(const char *format, ...)
-{
-    if (DEBUG) {
-        va_list args;
-        va_start(args, format);
-        vprintf(format, args);
-        va_end(args);
-    }
-}
 
 bool marked(void *block)
 {
@@ -54,7 +50,7 @@ void *gc_malloc(size_t size)
 
     void *block = malloc(size+2*POINTER_SIZE);
     if (block == NULL) {
-        printf_debug("Malloc failure...\tSize request: %zu\n", size+2*POINTER_SIZE);
+        debug_print("Malloc failure...\tSize request: %zu\n", size+2*POINTER_SIZE);
         return NULL;
     }
     PREVIOUS_POINTER(block) = &used_head; // point previous pointer at address of used_head
@@ -63,7 +59,7 @@ void *gc_malloc(size_t size)
         PREVIOUS_POINTER(used_head) = block; // point previous pointer of next block at new block
     }
     used_head = block; // new block at beginning of linked list
-    printf_debug("Block allocated...\tAddress:%p\tSize: %zu\tPrevious: %p\tNext: %p\n", 
+    debug_print("Block allocated...\tAddress:%p\tSize: %zu\tPrevious: %p\tNext: %p\n", 
             block, malloc_usable_size(block), PREVIOUS_POINTER(block), NEXT_POINTER(block));
     return block;
 }
@@ -77,7 +73,7 @@ void *gc_realloc(void *ptr, size_t size)
     void *next = NEXT_POINTER(ptr);
     // if size request is 0, free block
     if (size == 0) {
-        printf_debug("Realloc size request 0, freeing block...\tAddress: %p\n", ptr);
+        debug_print("Realloc size request 0, freeing block...\tAddress: %p\n", ptr);
         if (previous != &used_head) {
             NEXT_POINTER(previous) = next;
         } else {
@@ -97,7 +93,7 @@ void *gc_realloc(void *ptr, size_t size)
     void *new = realloc(ptr, size+2*POINTER_SIZE);
     // if realloc failed, return NULL
     if (new == NULL) {
-        printf_debug("Realloc failure...\tPointer: %p\tSize request: %zu\n", ptr, size+2*POINTER_SIZE);
+        debug_print("Realloc failure...\tPointer: %p\tSize request: %zu\n", ptr, size+2*POINTER_SIZE);
         PREVIOUS_POINTER(ptr) = previous;
         NEXT_POINTER(ptr) = next;
         return NULL;
@@ -107,7 +103,7 @@ void *gc_realloc(void *ptr, size_t size)
     NEXT_POINTER(new) = next;
     // if data was not moved simply return old pointer
     if (ptr == new) {
-        printf_debug("Block resized in place...\tAddress: %p\tSize: %zu\tPrevious: %p\tNext: %p\n",
+        debug_print("Block resized in place...\tAddress: %p\tSize: %zu\tPrevious: %p\tNext: %p\n",
                 ptr, malloc_usable_size(new), previous, next);
         return ptr;
     }
@@ -120,20 +116,20 @@ void *gc_realloc(void *ptr, size_t size)
     if (next != NULL) {
         PREVIOUS_POINTER(next) = new;
     }
-    printf_debug("Block resized, moved to new location...\tAddress: %p\tSize: %zu\tPrevious: %p\tNext: %p\n",
+    debug_print("Block resized, moved to new location...\tAddress: %p\tSize: %zu\tPrevious: %p\tNext: %p\n",
             new, malloc_usable_size(new), previous, next);
     return new;
 }
 
 void sweep(void) 
 {
-    printf_debug("Commencing sweep...\n");
+    debug_print("Commencing sweep...\n");
     void *previous = used_head;
     void *current = used_head;
     void *next;
     while (current != NULL && current != (void *) 1) {
         if (marked(current)) {
-            printf_debug("Skipping marked block...\tAddress: %p\n", current);
+            debug_print("Skipping marked block...\tAddress: %p\n", current);
             unmark_block(current);
             next = NEXT_POINTER(current);
             previous = current;
@@ -142,7 +138,7 @@ void sweep(void)
             if (used_head == current) {
                 used_head = next;
             }
-            printf_debug("Freeing unmarked block...\tAddress: %p\n", current);
+            debug_print("Freeing unmarked block...\tAddress: %p\n", current);
             if (next != NULL && next != (void *) 1) {
                 bool mark_present = marked(next); 
                 *((void **) next) = previous;
@@ -155,10 +151,10 @@ void sweep(void)
         }
         current = next;
     }
-    printf_debug("Sweep complete\n");
+    debug_print("Sweep complete\n");
 }
 
-void print_heap(void) 
+void print_heap(void)
 {
     void *current = used_head;
     printf("Allocated blocks...\n");
