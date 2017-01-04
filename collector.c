@@ -20,9 +20,9 @@ void *used_head = NULL;
 /*
 gc_malloc memory block layout:
 
-+-----------------------------+-----------+-----------+
-|          User data          | *previous |   *next   |
-+-----------------------------+-----------+-----------+
++-----------------------------+-----------+-----------+------------------+
+|          User data          | *previous |   *next   | Stephen's Insert |
++-----------------------------+-----------+-----------+------------------+
 */
 
 bool marked(void *block)
@@ -121,10 +121,10 @@ void *gc_realloc(void *ptr, size_t size)
 void sweep(void) 
 {
     debug_print("Commencing sweep...\n");
-    void *previous = used_head;
+    void *previous = &used_head;
     void *current = used_head;
     void *next;
-    while (current != NULL && current != (void *) 1) {
+    while (current != NULL) {
         if (marked(current)) {
             debug_print("Skipping marked block...\tAddress: %p\n", current);
             unmark_block(current);
@@ -134,16 +134,17 @@ void sweep(void)
             next = NEXT_POINTER(current);
             if (used_head == current) {
                 used_head = next;
+            } else {
+                NEXT_POINTER(previous) = next;
             }
             debug_print("Freeing unmarked block...\tAddress: %p\n", current);
-            if (next != NULL && next != (void *) 1) {
+            if (next != NULL) {
                 bool mark_present = marked(next); 
-                *((void **) next) = previous;
+                PREVIOUS_POINTER(next) = previous;
                 if (mark_present) {
                     mark_block(next);
                 }
             }
-            NEXT_POINTER(previous) = next;
             free(current);
         }
         current = next;
