@@ -126,7 +126,7 @@ int test_unmark_block(void)
 int test_gc_realloc(void)
 {
     printf("Testing \'gc_realloc\'...\n");
-    printf("Testing 'free'' on size request 0... ");
+    printf("Testing 'free' on size request 0... ");
     int chain_error = 0;
     void *block1 = gc_malloc(40);
     void *block2 = gc_malloc(40);
@@ -182,6 +182,75 @@ int test_gc_realloc(void)
     return chain_error+size_error+resize_inplace_error+relocation_error;
 }
 
+int test_sweep()
+{
+    printf("Testing \'sweep\'...\n");
+    printf("Testing with empty heap... ");
+    int empty_error = 0;
+    used_head = NULL;
+    sweep();
+    if (used_head == NULL) { 
+        printf("passed.\n");
+     } else { 
+         printf("failed.\n");
+         empty_error++;
+     }
+    printf("Testing with all blocks unmarked... ");
+    int unmarked_error = 0;
+    gc_malloc(20);
+    gc_malloc(20);
+    sweep();
+    if (used_head == NULL) { 
+        printf("passed.\n");
+     } else { 
+         printf("failed.\n");
+         unmarked_error++;
+     }
+    printf("Testing with all blocks marked... ");
+    int marked_error = 0;
+    void *block1 = gc_malloc(20);
+    void *block2 = gc_malloc(20);
+    mark_block(block1);
+    mark_block(block2);
+    sweep();
+    if (!marked(block1) && !marked(block2)) { 
+        printf("passed.\n");
+     } else { 
+         printf("failed.\n");
+         marked_error++;
+     }
+    sweep();
+    printf("Testing with mixture of marked and unmarked blocks... ");
+    int pointer_error = 0;
+    block1 = gc_malloc(20);
+    block2 = gc_malloc(20);
+    mark_block(block1);
+    sweep();
+    if (used_head != block1 || marked(block1) 
+        || PREVIOUS_POINTER(block1) != &used_head) {
+        pointer_error++;
+    }
+    sweep();
+    // test with sequence: marked, unmarked, marked
+    block1 = gc_malloc(20);
+    block2 = gc_malloc(20);
+    void *block3 = gc_malloc(20);
+    mark_block(block1);
+    mark_block(block3);
+    sweep();
+    if (used_head != block3 || marked(block1) || marked(block3) 
+        || NEXT_POINTER(block3)!=block1 || PREVIOUS_POINTER(block1)!=block3) {
+        pointer_error++;
+    }
+    pointer_error == 0 ? printf("passed.\n") : printf("failed.\n");
+    if (empty_error+unmarked_error+marked_error+pointer_error == 0) {
+        printf("Test complete: passed.\n\n");
+    } else {
+        printf("Test complete: failed.\n\n");
+    }
+    return empty_error+unmarked_error+marked_error+pointer_error;
+}
+
 int main(void) 
 {
     int errors = 0;
@@ -190,6 +259,7 @@ int main(void)
     errors += test_mark_block();
     errors += test_unmark_block();
     errors += test_gc_realloc();
+    errors += test_sweep();
     if (errors == 0) {
         printf("All unit tests completed sucessfully.\n");
     } else {
