@@ -7,60 +7,77 @@
 
 extern void *used_head;
 
-int test_gc_malloc(void) 
+int test_gc_malloc_case_1(void)
 {
-    printf("Testing \'gc_malloc\'...\n");
-    int chain_error = 0;
+    assert(used_head == NULL);
     printf("Testing linked-list pointer threading... ");
+    int error = 0;
     void *block1 = gc_malloc(40);
     if (used_head != block1) {
-        chain_error++;
+        error++;
     }
     if (PREVIOUS_POINTER(block1) != &used_head) {
-        chain_error++;
+        error++;
     }
     if (NEXT_POINTER(block1) != NULL) {
-        chain_error++;
+        error++;
     }
     void *block2 = gc_malloc(40);
     if (used_head != block2) {
-        chain_error++;
+        error++;
     }
     if (PREVIOUS_POINTER(block2) != &used_head) {
-        chain_error++;
+        error++;
     }
     if (NEXT_POINTER(block2) != block1) {
-        chain_error++;
+        error++;
     }
     if (PREVIOUS_POINTER(block1) != block2) {
-        chain_error++;
+        error++;
     }
     free(block1);
     free(block2);
-    chain_error == 0 ? printf("passed.\n") : printf("failed.\n");
+    used_head = NULL;
+    error == 0 ? printf("passed.\n") : printf("failed.\n");
+    return error;
+}
+
+int test_gc_malloc_case_2(void)
+{
+    assert(used_head == NULL);
     printf("Testing with extreme input values... ");
-    int input_error = 0;
-    block1 = gc_malloc(0);
-    if (block1 == NULL) { 
-        input_error++;
+    int error = 0;
+    void *block = gc_malloc(0);
+    if (block == NULL) { 
+        error++;
     }
-    free(block1);
-    block1 = gc_malloc(-50);
-    if (block1 != NULL) { 
-        input_error++;
+    free(block);
+    used_head = NULL;
+    block = gc_malloc(-50);
+    if (block != NULL) { 
+        error++;
     }
-    free(block1);
-    input_error == 0 ? printf("passed.\n") : printf("failed.\n");
-    if (chain_error+input_error == 0) {
+    error == 0 ? printf("passed.\n") : printf("failed.\n");
+    return error;
+}
+
+int test_gc_malloc(void) 
+{
+    printf("Testing \'gc_malloc\'...\n");
+    int errors = 0;
+    errors += test_gc_malloc_case_1();
+    errors += test_gc_malloc_case_2();
+    if (errors == 0) {
         printf("Test complete: passed.\n\n");
     } else {
         printf("Test complete: failed.\n\n");
     }
-    return chain_error+input_error;
+    return errors;
 }
 
 int test_marked(void) 
 {
+    assert(used_head == NULL);
     printf("Testing \'marked\'...\n");
     printf("Allocating block...\n");
     void *block = gc_malloc(16);
@@ -83,6 +100,7 @@ int test_marked(void)
 
 int test_mark_block(void) 
 {
+    assert(used_head == NULL);
     printf("Testing \'mark_block\'...\n");
     printf("Allocating block...\n");
     void *block = gc_malloc(16);
@@ -103,6 +121,7 @@ int test_mark_block(void)
 
 int test_unmark_block(void) 
 {
+    assert(used_head == NULL);
     printf("Testing \'unmark_block\'...\n");
     printf("Allocating block...\n");
     void *block = gc_malloc(16);
@@ -123,112 +142,163 @@ int test_unmark_block(void)
     }
 }
 
-int test_gc_realloc(void)
+int test_gc_realloc_case_1(void)
 {
-    printf("Testing \'gc_realloc\'...\n");
+    assert(used_head == NULL);
     printf("Testing 'free' on size request 0... ");
-    int chain_error = 0;
+    int error = 0;
     void *block1 = gc_malloc(40);
     void *block2 = gc_malloc(40);
     void *realloc1 = gc_realloc(block1, 0);
     if (NEXT_POINTER(block2) != NULL) {
-        chain_error++;
+        error++;
     }
     if (realloc1 != NULL) {
-        chain_error++;
+        error++;
     }
     void *realloc2 = gc_realloc(block2, 0);
     if (realloc2 != NULL) {
-        chain_error++;
+        error++;
     }
     if (used_head != NULL) {
-        chain_error++;
+        error++;
     }
-    chain_error == 0 ? printf("passed.\n") : printf("failed.\n");
+    error == 0 ? printf("passed.\n") : printf("failed.\n");
+    return error;
+}
+
+int test_gc_realloc_case_2(void)
+{
+    assert(used_head == NULL);
     printf("Testing handling of unsatisfiable size request... ");
-    int size_error = 0;
-    block1 = gc_malloc(20);
-    block2 = gc_malloc(20);
-    realloc1 = gc_realloc(block1, 0xfffffffffffff);
+    int error = 0;
+    void *block1 = gc_malloc(20);
+    void *realloc1 = gc_realloc(block1, 0xfffffffffffff);
     if(realloc1 != NULL || block1 == NULL) {
-        size_error++;
+        error++;
     }
-    size_error == 0 ? printf("passed.\n") : printf("failed.\n");
+    free(block1);
+    used_head = NULL;
+    error == 0 ? printf("passed.\n") : printf("failed.\n");
+    return error;
+}
+
+int test_gc_realloc_case_3(void)
+{
+    assert(used_head == NULL);
     printf("Testing block resizing and relocation... ");
-    int relocation_error = 0;
-    realloc1 = gc_realloc(block1, 1200);
-    if (realloc1 == block1) {
-        if (PREVIOUS_POINTER(block1) != block2 || NEXT_POINTER(block1) != NULL) {
-            relocation_error++;
+    int error = 0;
+    void *block1 = gc_malloc(20);
+    void *block2 = gc_malloc(20);
+    void *realloc1 = gc_realloc(block1, 1200);
+    if (realloc1 != block1) {
+        if (PREVIOUS_POINTER(realloc1) != block2 || NEXT_POINTER(realloc1) != NULL) {
+            error++;
         }
+    } else {
+        error++;
     }
-    relocation_error == 0 ? printf("passed.\n") : printf("failed.\n");
+    free(block2);
+    free(realloc1);
+    used_head = NULL;
+    error == 0 ? printf("passed.\n") : printf("failed.\n");
+    return error;
+}
+
+int test_gc_realloc_case_4(void)
+{
+    assert(used_head == NULL);
     printf("Testing in-place block resizing... ");
-    int resize_inplace_error = 0;
-    realloc2 = gc_realloc(block2, 24);
-    if (realloc2 != block2) {
-        if (PREVIOUS_POINTER(realloc2) != &used_head || NEXT_POINTER(realloc2) != realloc1) {
-            resize_inplace_error++;
+    int error = 0;
+    void *block1 = gc_malloc(20);
+    void *realloc1 = gc_realloc(block1, 24);
+    if (realloc1 == block1) {
+        if (PREVIOUS_POINTER(realloc1) != &used_head || NEXT_POINTER(realloc1) != NULL) {
+            error++;
         }
+    } else {
+        error+=4;
     }
     free(realloc1);
-    free(realloc2);
-    resize_inplace_error == 0 ? printf("passed.\n") : printf("failed.\n");
-    if (chain_error+size_error+resize_inplace_error+relocation_error == 0) {
+    used_head = NULL;
+    error == 0 ? printf("passed.\n") : printf("failed.\n");
+    return error;
+}
+
+int test_gc_realloc(void)
+{
+    printf("Testing \'gc_realloc\'...\n");
+    int errors = 0;
+    errors += test_gc_realloc_case_1();
+    errors += test_gc_realloc_case_2();
+    errors += test_gc_realloc_case_3();
+    errors += test_gc_realloc_case_4();
+    if (errors == 0) {
         printf("Test complete: passed.\n\n");
     } else {
         printf("Test complete: failed.\n\n");
     }
-    return chain_error+size_error+resize_inplace_error+relocation_error;
+    return errors;
 }
 
-int test_sweep()
+int test_sweep_case_1(void)
 {
-    printf("Testing \'sweep\'...\n");
+    assert(used_head == NULL);
     printf("Testing with empty heap... ");
-    int empty_error = 0;
-    used_head = NULL;
+    int error = 0;
     sweep();
-    if (used_head == NULL) { 
-        printf("passed.\n");
-     } else { 
-         printf("failed.\n");
-         empty_error++;
-     }
+    if (used_head != NULL) {
+        error++;
+    }
+    error == 0 ? printf("passed.\n") : printf("failed.\n");
+    return error;
+}
+
+int test_sweep_case_2(void)
+{
+    assert(used_head == NULL);
     printf("Testing with all blocks unmarked... ");
-    int unmarked_error = 0;
+    int error = 0;
     gc_malloc(20);
     gc_malloc(20);
     sweep();
-    if (used_head == NULL) { 
-        printf("passed.\n");
-     } else { 
-         printf("failed.\n");
-         unmarked_error++;
-     }
+    if (used_head != NULL) {
+        error++;
+    }
+    error == 0 ? printf("passed.\n") : printf("failed.\n");
+    return error;
+}
+
+int test_sweep_case_3(void)
+{
+    assert(used_head == NULL);
     printf("Testing with all blocks marked... ");
-    int marked_error = 0;
+    int error = 0;
     void *block1 = gc_malloc(20);
     void *block2 = gc_malloc(20);
     mark_block(block1);
     mark_block(block2);
     sweep();
-    if (!marked(block1) && !marked(block2)) { 
-        printf("passed.\n");
-     } else { 
-         printf("failed.\n");
-         marked_error++;
-     }
+    if (marked(block1) || marked(block2)) { 
+        error++;
+    }
     sweep();
+    error == 0 ? printf("passed.\n") : printf("failed.\n");
+    return error;
+}
+
+int test_sweep_case_4(void)
+{
+    assert(used_head == NULL);
     printf("Testing with mixture of marked and unmarked blocks... ");
-    int pointer_error = 0;
-    block1 = gc_malloc(20);
-    block2 = gc_malloc(20);
+    int error = 0;
+    void *block1 = gc_malloc(20);
+    void *block2 = gc_malloc(20);
     mark_block(block1);
     sweep();
     if (used_head != block1 || marked(block1) 
         || PREVIOUS_POINTER(block1) != &used_head) {
-        pointer_error++;
+        error++;
     }
     sweep();
     // test with sequence: marked, unmarked, marked
@@ -240,15 +310,26 @@ int test_sweep()
     sweep();
     if (used_head != block3 || marked(block1) || marked(block3) 
         || NEXT_POINTER(block3)!=block1 || PREVIOUS_POINTER(block1)!=block3) {
-        pointer_error++;
+        error++;
     }
-    pointer_error == 0 ? printf("passed.\n") : printf("failed.\n");
-    if (empty_error+unmarked_error+marked_error+pointer_error == 0) {
+    error == 0 ? printf("passed.\n") : printf("failed.\n");
+    return error;
+}
+
+int test_sweep()
+{
+    printf("Testing \'sweep\'...\n");
+    int errors = 0;
+    errors += test_sweep_case_1();
+    errors += test_sweep_case_2();
+    errors += test_sweep_case_3();
+    errors += test_sweep_case_4();
+    if (errors == 0) {
         printf("Test complete: passed.\n\n");
     } else {
         printf("Test complete: failed.\n\n");
     }
-    return empty_error+unmarked_error+marked_error+pointer_error;
+    return errors;
 }
 
 int main(void) 
