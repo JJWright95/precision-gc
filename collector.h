@@ -10,6 +10,7 @@ void mark_block(void *block);
 void unmark_block(void *block);
 void *gc_malloc(size_t size);
 void *gc_realloc(void *ptr, size_t size);
+void *pointed_to_heap_block(void *pointer);
 void sweep(void);
 void print_heap(void);
 

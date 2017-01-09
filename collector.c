@@ -15,6 +15,8 @@
 
 #define debug_print(...) do { if (DEBUG_TEST) fprintf(stderr, ##__VA_ARGS__); } while (0)
 
+#define INSERT(BLOCK_ADDRESS) ((void *) ((char *) BLOCK_ADDRESS+malloc_usable_size(BLOCK_ADDRESS)-2*POINTER_SIZE))
+
 void *used_head = NULL;
 void *stack_base = NULL;
 
@@ -132,6 +134,21 @@ void *gc_realloc(void *ptr, size_t size)
     debug_print("Block resized, moved to new location...\tAddress: %p\tSize: %zu\tPrevious: %p\tNext: %p\n",
             new, malloc_usable_size(new), previous, next);
     return new;
+}
+
+void *pointed_to_heap_block(void *pointer)
+{
+    void *heap_block = used_head;
+    if (heap_block == NULL) {
+        return NULL;
+    }
+    while (heap_block != NULL) {
+        if (pointer >= heap_block && pointer < INSERT(heap_block)) {
+            return heap_block;
+        }
+        heap_block = NEXT_POINTER(heap_block);
+    }
+    return NULL;
 }
 
 void sweep(void) 
