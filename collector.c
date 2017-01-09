@@ -15,8 +15,6 @@
 
 #define debug_print(...) do { if (DEBUG_TEST) fprintf(stderr, ##__VA_ARGS__); } while (0)
 
-#define INSERT(BLOCK_ADDRESS) ((void *) ((char *) BLOCK_ADDRESS+malloc_usable_size(BLOCK_ADDRESS)-2*POINTER_SIZE))
-
 void *used_head = NULL;
 void *stack_base = NULL;
 
@@ -143,7 +141,7 @@ void *pointed_to_heap_block(void *pointer)
         return NULL;
     }
     while (heap_block != NULL) {
-        if (pointer >= heap_block && pointer < INSERT(heap_block)) {
+        if (pointer >= heap_block && pointer < INSERT_ADDRESS(heap_block)) {
             return heap_block;
         }
         heap_block = NEXT_POINTER(heap_block);
