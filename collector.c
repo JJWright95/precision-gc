@@ -149,6 +149,24 @@ void *pointed_to_heap_block(void *pointer)
     return NULL;
 }
 
+void scan_stack_for_pointers_to_heap(void)
+{
+    void *heap_block = NULL;
+    void *stack_walker = stack_base;
+    void *stack_pointer;
+    asm volatile ("movq %%rsp, %0" : "=r" (stack_pointer)); // 'movq' and 'rsp' required for 64-bit
+
+    assert(stack_base != NULL);
+    assert(stack_pointer != NULL);
+
+    for (stack_walker; stack_walker>stack_pointer; stack_walker-=POINTER_SIZE) {
+        heap_block = pointed_to_heap_block(stack_walker);
+        if (heap_block != NULL) {
+            // TODO: push block on to stack for BFS heap traversal
+        }
+    }
+}
+
 void sweep(void) 
 {
     debug_print("Commencing sweep...\n");
