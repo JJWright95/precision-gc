@@ -16,6 +16,22 @@
 #define debug_print(...) do { if (DEBUG_TEST) fprintf(stderr, ##__VA_ARGS__); } while (0)
 
 void *used_head = NULL;
+void *stack_base = NULL;
+
+void gc_init(void)
+{
+    FILE *process_stats_fp;
+    process_stats_fp = fopen("/proc/self/stat", "r");
+    assert(process_stats_fp != NULL);
+
+    fscanf(process_stats_fp,
+           "%*d %*s %*c %*d %*d %*d %*d %*d %*u "
+           "%*u %*u %*u %*u %*u %*u %*d %*d "
+           "%*d %*d %*d %*d %*u %*u %*d "
+           "%*u %*u %*u %lu", (uintptr_t *) &stack_base);
+    fclose(process_stats_fp);
+    debug_print("Base of stack: %p\n", stack_base);
+}
 
 /*
 gc_malloc memory block layout:

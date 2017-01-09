@@ -1,9 +1,10 @@
-#ifndef __COLLECTOR_H__
-#define __COLLECTOR_H__
+#ifndef COLLECTOR_H
+#define COLLECTOR_H
 
 #include <stddef.h>
 #include <stdbool.h>
 
+void gc_init(void);
 bool marked(void *block);
 void mark_block(void *block);
 void unmark_block(void *block);
