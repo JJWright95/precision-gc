@@ -20,6 +20,7 @@ void *stack_base = NULL;
 
 void gc_init(void)
 {
+    // http://man7.org/linux/man-pages/man5/proc.5.html Bottom of stack: 28th value in /proc/self/stat
     FILE *process_stats_fp;
     process_stats_fp = fopen("/proc/self/stat", "r");
     assert(process_stats_fp != NULL);
@@ -160,7 +161,7 @@ void scan_stack_for_pointers_to_heap(void)
     assert(stack_pointer != NULL);
 
     for (stack_walker; stack_walker>stack_pointer; stack_walker-=POINTER_SIZE) {
-        heap_block = pointed_to_heap_block(stack_walker);
+        heap_block = pointed_to_heap_block(*((void **)stack_walker));
         if (heap_block != NULL) {
             // TODO: push block on to stack for BFS heap traversal
         }
