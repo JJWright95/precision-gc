@@ -20,6 +20,10 @@
 void *used_head = NULL;
 void *stack_base = NULL;
 
+// look at linker scripts or symbol table for segment details
+extern char data_start; // beginning of .data segment 
+extern char edata; // end of .data segment
+
 void gc_init(void)
 {
     // http://man7.org/linux/man-pages/man5/proc.5.html Bottom of stack: 28th value in /proc/self/stat
@@ -171,6 +175,23 @@ void scan_stack_for_pointers_to_heap(void)
         }
     }
     debug_print("Stack scan complete\n");
+}
+
+void scan_data_segment_for_pointers_to_heap(void)
+{
+    debug_print("Commencing .data scan...\tdata_start: %p\tedata: %p\n", &data_start, &edata);
+    void *heap_block = NULL;
+    void *segment_walker = &data_start;
+
+    for (segment_walker; segment_walker<(void *)&edata; segment_walker+=POINTER_SIZE) {
+        debug_print(".data walker address: %p\tpointer value: %p\n", segment_walker, *((void **) segment_walker));
+        heap_block = pointed_to_heap_block(*((void **) segment_walker));
+        if (heap_block != NULL) {
+            debug_print("Found pointer to heap block %p\n", heap_block);
+            // TODO: push block on to stack for BFS heap traversal
+        }
+    }
+    debug_print(".data scan complete\n");
 }
 
 void sweep(void) 
