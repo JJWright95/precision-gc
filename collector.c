@@ -23,6 +23,8 @@ void *stack_base = NULL;
 // look at linker scripts or symbol table for segment details
 extern char data_start; // beginning of .data segment 
 extern char edata; // end of .data segment
+extern char __bss_start; // start of .bss segment
+extern char end; // end of .bss segment
 
 void gc_init(void)
 {
@@ -192,6 +194,26 @@ void scan_data_segment_for_pointers_to_heap(void)
         }
     }
     debug_print(".data scan complete\n");
+}
+
+void scan_bss_segment_for_pointers_to_heap(void)
+{
+    debug_print("Commencing .bss scan...\t__bss_start: %p\tend: %p\n", &__bss_start, &end);
+    void *heap_block = NULL;
+    void *segment_walker = &__bss_start;
+
+    for (segment_walker; segment_walker<(void *)&end; segment_walker+=POINTER_SIZE) {
+        debug_print(".bss walker address: %p\tpointer value: %p\n", segment_walker, *((void **) segment_walker));
+        heap_block = pointed_to_heap_block(*((void **) segment_walker));
+        if (heap_block != NULL) {
+            if (segment_walker == &used_head && heap_block == used_head) {
+                continue;
+            }
+            debug_print("Found pointer to heap block %p\n", heap_block);
+            // TODO: push block on to stack for BFS heap traversal
+        }
+    }
+    debug_print(".bss scan complete\n");
 }
 
 void sweep(void) 
