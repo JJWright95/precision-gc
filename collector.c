@@ -7,6 +7,8 @@
 #include "collector.h"
 #include "pointer_macros.h"
 
+#include <string.h>
+
 #ifdef DEBUG
 #define DEBUG_TEST 1
 #else
@@ -153,19 +155,22 @@ void *pointed_to_heap_block(void *pointer)
 void scan_stack_for_pointers_to_heap(void)
 {
     void *heap_block = NULL;
-    void *stack_walker = stack_base;
     void *stack_pointer;
     asm volatile ("movq %%rsp, %0" : "=r" (stack_pointer)); // 'movq' and 'rsp' required for 64-bit
+    void *stack_walker = stack_pointer;
 
     assert(stack_base != NULL);
     assert(stack_pointer != NULL);
+    debug_print("Commencing stack scan...\tStack pointer: %p\tStack base: %p\n", stack_pointer, stack_base);
 
-    for (stack_walker; stack_walker>stack_pointer; stack_walker-=POINTER_SIZE) {
-        heap_block = pointed_to_heap_block(*((void **)stack_walker));
+    for (stack_walker; stack_walker<stack_base; stack_walker+=POINTER_SIZE) {
+        heap_block = pointed_to_heap_block(*((void **) stack_walker));
         if (heap_block != NULL) {
+            debug_print("Found pointer to heap block %p\n", heap_block);
             // TODO: push block on to stack for BFS heap traversal
         }
     }
+    debug_print("Stack scan complete\n");
 }
 
 void sweep(void) 
