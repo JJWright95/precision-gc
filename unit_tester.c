@@ -2,8 +2,10 @@
 #include <assert.h>
 #include <malloc.h>
 #include <stdint.h>
-#include "collector.h"
+
+#include "gc.h"
 #include "pointer_macros.h"
+
 
 extern void *heap_list_head;
 

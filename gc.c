@@ -4,10 +4,10 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <stdint.h>
-#include "collector.h"
+
+#include "gc.h"
 #include "pointer_macros.h"
 
-#include <string.h>
 
 #ifdef DEBUG
 #define DEBUG_TEST 1

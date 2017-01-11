@@ -1,5 +1,5 @@
-#ifndef COLLECTOR_H
-#define COLLECTOR_H
+#ifndef GC_H
+#define GC_H
 
 #include <stddef.h>
 #include <stdbool.h>
