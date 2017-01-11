@@ -5,28 +5,28 @@
 #include "collector.h"
 #include "pointer_macros.h"
 
-extern void *used_head;
+extern void *heap_list_head;
 
 int test_gc_malloc_case_1(void)
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing linked-list pointer threading... ");
     int error = 0;
     void *block1 = gc_malloc(40);
-    if (used_head != block1) {
+    if (heap_list_head != block1) {
         error++;
     }
-    if (PREVIOUS_POINTER(block1) != &used_head) {
+    if (PREVIOUS_POINTER(block1) != &heap_list_head) {
         error++;
     }
     if (NEXT_POINTER(block1) != NULL) {
         error++;
     }
     void *block2 = gc_malloc(40);
-    if (used_head != block2) {
+    if (heap_list_head != block2) {
         error++;
     }
-    if (PREVIOUS_POINTER(block2) != &used_head) {
+    if (PREVIOUS_POINTER(block2) != &heap_list_head) {
         error++;
     }
     if (NEXT_POINTER(block2) != block1) {
@@ -37,14 +37,14 @@ int test_gc_malloc_case_1(void)
     }
     free(block1);
     free(block2);
-    used_head = NULL;
+    heap_list_head = NULL;
     error == 0 ? printf("passed.\n") : printf("failed.\n");
     return error;
 }
 
 int test_gc_malloc_case_2(void)
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing with extreme input values... ");
     int error = 0;
     void *block = gc_malloc(0);
@@ -52,7 +52,7 @@ int test_gc_malloc_case_2(void)
         error++;
     }
     free(block);
-    used_head = NULL;
+    heap_list_head = NULL;
     block = gc_malloc(-50);
     if (block != NULL) { 
         error++;
@@ -77,7 +77,7 @@ int test_gc_malloc(void)
 
 int test_marked(void) 
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing \'marked\'...\n");
     printf("Allocating block...\n");
     void *block = gc_malloc(16);
@@ -88,7 +88,7 @@ int test_marked(void)
     printf("Testing for presence of mark...\n");
     bool block_marked = marked(block);
     free(block);
-    used_head = NULL;
+    heap_list_head = NULL;
     if (!block_unmarked && block_marked) {
         printf("Test complete: passed.\n\n");
         return 0;
@@ -100,7 +100,7 @@ int test_marked(void)
 
 int test_mark_block(void) 
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing \'mark_block\'...\n");
     printf("Allocating block...\n");
     void *block = gc_malloc(16);
@@ -109,7 +109,7 @@ int test_mark_block(void)
     mark_block(block);
     bool block_marked = marked(block);
     free(block);
-    used_head = NULL;
+    heap_list_head = NULL;
     if (block_marked) {
         printf("Block marked successfully.\nTest complete: passed.\n\n");
         return 0;
@@ -121,7 +121,7 @@ int test_mark_block(void)
 
 int test_unmark_block(void) 
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing \'unmark_block\'...\n");
     printf("Allocating block...\n");
     void *block = gc_malloc(16);
@@ -132,7 +132,7 @@ int test_unmark_block(void)
     unmark_block(block);
     bool block_marked = marked(block);
     free(block);
-    used_head = NULL;
+    heap_list_head = NULL;
     if (!block_marked) {
         printf("Mark removed successfully.\nTest complete: passed.\n\n");
         return 0;
@@ -144,7 +144,7 @@ int test_unmark_block(void)
 
 int test_gc_realloc_case_1(void)
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing 'free' on size request 0... ");
     int error = 0;
     void *block1 = gc_malloc(40);
@@ -160,7 +160,7 @@ int test_gc_realloc_case_1(void)
     if (realloc2 != NULL) {
         error++;
     }
-    if (used_head != NULL) {
+    if (heap_list_head != NULL) {
         error++;
     }
     error == 0 ? printf("passed.\n") : printf("failed.\n");
@@ -169,7 +169,7 @@ int test_gc_realloc_case_1(void)
 
 int test_gc_realloc_case_2(void)
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing handling of unsatisfiable size request... ");
     int error = 0;
     void *block1 = gc_malloc(20);
@@ -178,14 +178,14 @@ int test_gc_realloc_case_2(void)
         error++;
     }
     free(block1);
-    used_head = NULL;
+    heap_list_head = NULL;
     error == 0 ? printf("passed.\n") : printf("failed.\n");
     return error;
 }
 
 int test_gc_realloc_case_3(void)
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing block resizing and relocation... ");
     int error = 0;
     void *block1 = gc_malloc(20);
@@ -200,27 +200,27 @@ int test_gc_realloc_case_3(void)
     }
     free(block2);
     free(realloc1);
-    used_head = NULL;
+    heap_list_head = NULL;
     error == 0 ? printf("passed.\n") : printf("failed.\n");
     return error;
 }
 
 int test_gc_realloc_case_4(void)
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing in-place block resizing... ");
     int error = 0;
     void *block1 = gc_malloc(20);
     void *realloc1 = gc_realloc(block1, 24);
     if (realloc1 == block1) {
-        if (PREVIOUS_POINTER(realloc1) != &used_head || NEXT_POINTER(realloc1) != NULL) {
+        if (PREVIOUS_POINTER(realloc1) != &heap_list_head || NEXT_POINTER(realloc1) != NULL) {
             error++;
         }
     } else {
         error+=4;
     }
     free(realloc1);
-    used_head = NULL;
+    heap_list_head = NULL;
     error == 0 ? printf("passed.\n") : printf("failed.\n");
     return error;
 }
@@ -243,11 +243,11 @@ int test_gc_realloc(void)
 
 int test_sweep_case_1(void)
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing with empty heap... ");
     int error = 0;
     sweep();
-    if (used_head != NULL) {
+    if (heap_list_head != NULL) {
         error++;
     }
     error == 0 ? printf("passed.\n") : printf("failed.\n");
@@ -256,13 +256,13 @@ int test_sweep_case_1(void)
 
 int test_sweep_case_2(void)
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing with all blocks unmarked... ");
     int error = 0;
     gc_malloc(20);
     gc_malloc(20);
     sweep();
-    if (used_head != NULL) {
+    if (heap_list_head != NULL) {
         error++;
     }
     error == 0 ? printf("passed.\n") : printf("failed.\n");
@@ -271,7 +271,7 @@ int test_sweep_case_2(void)
 
 int test_sweep_case_3(void)
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing with all blocks marked... ");
     int error = 0;
     void *block1 = gc_malloc(20);
@@ -289,15 +289,15 @@ int test_sweep_case_3(void)
 
 int test_sweep_case_4(void)
 {
-    assert(used_head == NULL);
+    assert(heap_list_head == NULL);
     printf("Testing with mixture of marked and unmarked blocks... ");
     int error = 0;
     void *block1 = gc_malloc(20);
     void *block2 = gc_malloc(20);
     mark_block(block1);
     sweep();
-    if (used_head != block1 || marked(block1) 
-        || PREVIOUS_POINTER(block1) != &used_head) {
+    if (heap_list_head != block1 || marked(block1) 
+        || PREVIOUS_POINTER(block1) != &heap_list_head) {
         error++;
     }
     sweep();
@@ -308,7 +308,7 @@ int test_sweep_case_4(void)
     mark_block(block1);
     mark_block(block3);
     sweep();
-    if (used_head != block3 || marked(block1) || marked(block3) 
+    if (heap_list_head != block3 || marked(block1) || marked(block3) 
         || NEXT_POINTER(block3)!=block1 || PREVIOUS_POINTER(block1)!=block3) {
         error++;
     }

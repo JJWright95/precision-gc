@@ -17,7 +17,8 @@
 
 #define debug_print(...) do { if (DEBUG_TEST) fprintf(stderr, ##__VA_ARGS__); } while (0)
 
-void *used_head = NULL;
+/* The garbage collected heap is stored as a doubly linked list */
+void *heap_list_head = NULL;
 void *stack_base = NULL;
 
 // look at linker scripts or symbol table for segment details
@@ -75,12 +76,12 @@ void *gc_malloc(size_t size)
         debug_print("Malloc failure...\tSize request: %zu\n", size+2*POINTER_SIZE);
         return NULL;
     }
-    PREVIOUS_POINTER(block) = &used_head; // point previous pointer at address of used_head
-    NEXT_POINTER(block) = used_head; // point next pointer at address of next block
-    if (used_head != NULL) { 
-        PREVIOUS_POINTER(used_head) = block; // point previous pointer of next block at new block
+    PREVIOUS_POINTER(block) = &heap_list_head; // point previous pointer at address of heap_list_head
+    NEXT_POINTER(block) = heap_list_head; // point next pointer at address of next block
+    if (heap_list_head != NULL) { 
+        PREVIOUS_POINTER(heap_list_head) = block; // point previous pointer of next block at new block
     }
-    used_head = block; // new block at beginning of linked list
+    heap_list_head = block; // new block at beginning of linked list
     debug_print("Block allocated...\tAddress:%p\tSize: %zu\tPrevious: %p\tNext: %p\n", 
             block, malloc_usable_size(block), PREVIOUS_POINTER(block), NEXT_POINTER(block));
     return block;
@@ -96,10 +97,10 @@ void *gc_realloc(void *ptr, size_t size)
     // if size request is 0, free block
     if (size == 0) {
         debug_print("Realloc size request 0, freeing block...\tAddress: %p\n", ptr);
-        if (previous != &used_head) {
+        if (previous != &heap_list_head) {
             NEXT_POINTER(previous) = next;
         } else {
-            used_head = next;
+            heap_list_head = next;
         }
         if (next != NULL) {
             PREVIOUS_POINTER(next) = previous;
@@ -130,10 +131,10 @@ void *gc_realloc(void *ptr, size_t size)
         return ptr;
     }
     // if get here, data has been moved. Update previous and next block pointers
-    if (previous != &used_head) {
+    if (previous != &heap_list_head) {
         NEXT_POINTER(previous) = new;
     } else {
-        used_head = new;
+        heap_list_head = new;
     }
     if (next != NULL) {
         PREVIOUS_POINTER(next) = new;
@@ -145,7 +146,7 @@ void *gc_realloc(void *ptr, size_t size)
 
 void *pointed_to_heap_block(void *pointer)
 {
-    void *heap_block = used_head;
+    void *heap_block = heap_list_head;
     if (heap_block == NULL) {
         return NULL;
     }
@@ -206,7 +207,7 @@ void scan_bss_segment_for_pointers_to_heap(void)
         debug_print(".bss walker address: %p\tpointer value: %p\n", segment_walker, *((void **) segment_walker));
         heap_block = pointed_to_heap_block(*((void **) segment_walker));
         if (heap_block != NULL) {
-            if (segment_walker == &used_head && heap_block == used_head) {
+            if (segment_walker == &heap_list_head && heap_block == heap_list_head) {
                 continue;
             }
             debug_print("Found pointer to heap block %p\n", heap_block);
@@ -219,8 +220,8 @@ void scan_bss_segment_for_pointers_to_heap(void)
 void sweep(void) 
 {
     debug_print("Commencing sweep...\n");
-    void *previous = &used_head;
-    void *current = used_head;
+    void *previous = &heap_list_head;
+    void *current = heap_list_head;
     void *next;
     while (current != NULL) {
         if (marked(current)) {
@@ -230,8 +231,8 @@ void sweep(void)
             previous = current;
         } else {
             next = NEXT_POINTER(current);
-            if (used_head == current) {
-                used_head = next;
+            if (heap_list_head == current) {
+                heap_list_head = next;
             } else {
                 NEXT_POINTER(previous) = next;
             }
@@ -252,7 +253,7 @@ void sweep(void)
 
 void print_heap(void)
 {
-    void *current = used_head;
+    void *current = heap_list_head;
     printf("Allocated blocks...\n");
     if (current == NULL) {
         printf("Heap empty\n");
