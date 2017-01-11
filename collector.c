@@ -173,7 +173,7 @@ void scan_stack_for_pointers_to_heap(void)
         heap_block = pointed_to_heap_block(*((void **) stack_walker));
         if (heap_block != NULL) {
             debug_print("Found pointer to heap block %p\n", heap_block);
-            // TODO: push block on to stack for BFS heap traversal
+            // TODO: push block on to queue for BFS heap traversal
         }
     }
     debug_print("Stack scan complete\n");
@@ -190,7 +190,7 @@ void scan_data_segment_for_pointers_to_heap(void)
         heap_block = pointed_to_heap_block(*((void **) segment_walker));
         if (heap_block != NULL) {
             debug_print("Found pointer to heap block %p\n", heap_block);
-            // TODO: push block on to stack for BFS heap traversal
+            // TODO: push block on to queue for BFS heap traversal
         }
     }
     debug_print(".data scan complete\n");
@@ -210,7 +210,7 @@ void scan_bss_segment_for_pointers_to_heap(void)
                 continue;
             }
             debug_print("Found pointer to heap block %p\n", heap_block);
-            // TODO: push block on to stack for BFS heap traversal
+            // TODO: push block on to queue for BFS heap traversal
         }
     }
     debug_print(".bss scan complete\n");

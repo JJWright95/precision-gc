@@ -12,6 +12,8 @@ void *gc_malloc(size_t size);
 void *gc_realloc(void *ptr, size_t size);
 void *pointed_to_heap_block(void *pointer);
 void scan_stack_for_pointers_to_heap(void);
+void scan_data_segment_for_pointers_to_heap(void);
+void scan_bss_segment_for_pointers_to_heap(void);
 void sweep(void);
 void print_heap(void);
 
