@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 
+#include "heap_index.h"
 #include "gc.h"
 #include "pointer_macros.h"
 
