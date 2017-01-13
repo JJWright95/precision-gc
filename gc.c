@@ -69,12 +69,9 @@ void unmark_block(void *block)
 
 void *gc_malloc(size_t size)
 {
-    // abort if size+2*POINTER_SIZE causes overflow
-    assert(size < size+2*POINTER_SIZE);
-
-    void *block = malloc(size+2*POINTER_SIZE);
+    void *block = malloc(size);
     if (block == NULL) {
-        debug_print("Malloc failure...\tSize request: %zu\n", size+2*POINTER_SIZE);
+        debug_print("Malloc failure...\tSize request: %zu\n", size);
         return NULL;
     }
     PREVIOUS_POINTER(block) = &heap_list_head; // point previous pointer at address of heap_list_head
