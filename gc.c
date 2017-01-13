@@ -109,12 +109,11 @@ void *gc_realloc(void *ptr, size_t size)
     // clear previous and next pointers in original, small block
     PREVIOUS_POINTER(ptr) = (void *) 0;
     NEXT_POINTER(ptr) = (void *) 0;
-    // request a new, larger block of memory. Abort if size+2*POINTER_SIZE causes overflow
-    assert(size < size+2*POINTER_SIZE);
-    void *new = realloc(ptr, size+2*POINTER_SIZE);
+    // request a new, larger block of memory.
+    void *new = realloc(ptr, size);
     // if realloc failed, return NULL
     if (new == NULL) {
-        debug_print("Realloc failure...\tPointer: %p\tSize request: %zu\n", ptr, size+2*POINTER_SIZE);
+        debug_print("Realloc failure...\tPointer: %p\tSize request: %zu\n", ptr, size);
         PREVIOUS_POINTER(ptr) = previous;
         NEXT_POINTER(ptr) = next;
         return NULL;
