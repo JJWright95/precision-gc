@@ -12,9 +12,12 @@ gc_malloc memory block layout:
 */
 
 #define POINTER_SIZE sizeof(void *)
-#define INSERT_ADDRESS(BLOCK_ADDRESS) ((void *) ((char *) BLOCK_ADDRESS+malloc_usable_size(BLOCK_ADDRESS)-sizeof(struct insert)-2*POINTER_SIZE))
-#define PREVIOUS_POINTER(BLOCK_ADDRESS) (*((void **) ((char *) BLOCK_ADDRESS+malloc_usable_size(BLOCK_ADDRESS)-sizeof(struct insert)- 2*POINTER_SIZE)))
-#define NEXT_POINTER(BLOCK_ADDRESS) (*((void **) ((char *) BLOCK_ADDRESS+malloc_usable_size(BLOCK_ADDRESS)-sizeof(struct insert)-POINTER_SIZE)))
+
+#define INSERT_ADDRESS(BLOCK_ADDRESS) ((void *) ((char *) insert_for_chunk_and_usable_size(BLOCK_ADDRESS, malloc_usable_size(BLOCK_ADDRESS))  -2*POINTER_SIZE))
+
+#define PREVIOUS_POINTER(BLOCK_ADDRESS) (*((void **) ((char *) insert_for_chunk_and_usable_size(BLOCK_ADDRESS, malloc_usable_size(BLOCK_ADDRESS)) - 2*POINTER_SIZE)))
+
+#define NEXT_POINTER(BLOCK_ADDRESS) (*((void **) ((char *) insert_for_chunk_and_usable_size(BLOCK_ADDRESS, malloc_usable_size(BLOCK_ADDRESS)) -POINTER_SIZE)))
 
 
 #endif
