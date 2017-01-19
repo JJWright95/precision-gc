@@ -301,6 +301,20 @@ void mark_reachable_heap_objects(void)
     }
 }
 
+void collect(void)
+{
+    assert(q_head == NULL);
+    assert(q_tail == NULL);
+
+    scan_stack_for_pointers_to_heap();
+    scan_data_segment_for_pointers_to_heap();
+    scan_bss_segment_for_pointers_to_heap();
+
+    mark_reachable_heap_objects();
+
+    sweep();
+}
+
 void print_heap(void)
 {
     void *current = heap_list_head;
