@@ -289,6 +289,18 @@ void sweep(void)
     debug_print("Sweep complete\n");
 }
 
+void mark_reachable_heap_objects(void)
+{
+    void *heap_object;
+    while (q_head != NULL) {
+        heap_object = dequeue_heap_queue_node()->heap_object;
+        if (!marked(heap_object)) {
+            process_heap_object_rec(heap_object);
+            mark_block(heap_object);
+        }
+    }
+}
+
 void print_heap(void)
 {
     void *current = heap_list_head;
