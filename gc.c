@@ -28,6 +28,42 @@ extern char edata; // end of .data segment
 extern char __bss_start; // start of .bss segment
 extern char end; // end of .bss segment
 
+// heap-object queue data
+struct q_node {
+    void *heap_object;
+    struct q_node *next;
+};
+
+struct q_node *q_head = NULL;
+struct q_node *q_tail = NULL;
+
+void enqueue_heap_queue_node(void *heap_pointer)
+{
+    struct q_node *node = malloc(sizeof(struct q_node));
+    node->heap_object = heap_pointer;
+    node->next = NULL;
+    if (q_tail == NULL) {
+        assert(q_head == NULL);
+        q_tail = node;
+        q_head = node;
+    } else {
+        q_tail->next = node;
+        q_tail = node;
+    }
+}
+
+struct q_node *dequeue_heap_queue_node(void)
+{
+    struct q_node *old_head = q_head;
+    if (old_head != NULL) {
+        q_head = old_head->next;
+        if (q_head == NULL) {
+            q_tail = NULL;
+        } 
+        free(old_head);
+    }
+}
+
 void gc_init(void)
 {
     // http://man7.org/linux/man-pages/man5/proc.5.html Bottom of stack: 28th value in /proc/self/stat
