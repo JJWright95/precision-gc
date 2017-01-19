@@ -64,6 +64,11 @@ struct q_node *dequeue_heap_queue_node(void)
     }
 }
 
+void process_heap_object_recursive(void *heap_object)
+{
+    // TODO: essentially copy Stephens's code
+}
+
 void gc_init(void)
 {
     // http://man7.org/linux/man-pages/man5/proc.5.html Bottom of stack: 28th value in /proc/self/stat
