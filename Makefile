@@ -8,13 +8,14 @@ all: client unit_test
 
 debug: CFLAGS += -g -DDEBUG
 debug: client unit_test
+	gdb -ex "set env LD_PRELOAD=/usr/local/src/liballocs/lib/liballocs_preload.so" \
+	-ex "handle SIGILL nostop noprint pass" client
 
 client: client.o gc.o
 	$(CC) $(CFLAGS) -o "$@" client.o gc.o
 client: LDLIBS += gc.o
 
-client.o: LIBALLOCS_ALLOC_FNS := gc_malloc(Z)p
-
+LIBALLOCS_ALLOC_FNS := gc_malloc(Z)p gc_realloc(pZ)p
 export LIBALLOCS_ALLOC_FNS
 
 unit_test: unit_tester.o gc.o
