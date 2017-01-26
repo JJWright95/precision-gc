@@ -1,15 +1,19 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
 #include <assert.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <limits.h>
 
 #include "heap_index.h"
 #include "gc.h"
 #include "pointer_macros.h"
 #include "liballocs.h"
 #include "uniqtype.h"
+#include "uniqtype-defs.h"
 
 
 #ifdef DEBUG
@@ -54,7 +58,7 @@ void enqueue_heap_queue_node(void *heap_pointer)
     }
 }
 
-struct q_node *dequeue_heap_queue_node(void)
+void dequeue_heap_queue_node(void)
 {
     struct q_node *old_head = q_head;
     if (old_head != NULL) {
@@ -77,19 +81,20 @@ void process_heap_object_recursive(void *object)
 	if (!UNIQTYPE_HAS_SUBOBJECTS(object_type)) return;
 
 	struct uniqtype_rel_info *related = &object_type->related[0];
-	unsigned int members;
+	unsigned members;
 	bool is_array;
 
 	if (UNIQTYPE_IS_COMPOSITE_TYPE(object_type)) {
 		is_array = false;
-		number_of_members = UNIQTYPE_COMPOSITE_MEMBER_COUNT(object_type);
+		members = UNIQTYPE_COMPOSITE_MEMBER_COUNT(object_type);
 		/* FIXME: toplevel of heap arrays */
 	} else {
 		is_array = true;
 		members = UNIQTYPE_ARRAY_LENGTH(object_type); /* FIXME: dynamically-sized arrays */
 	}
 
-	for (unsigned int i=0; i<members; ++i, related += (is_array ? 0 : 1)) {
+
+	for (unsigned i=0; i<members; ++i, related += (is_array ? 0 : 1)) {
 		// if we're an array, the element type should have known length (pos_maxoff)
 		assert(!is_array || UNIQTYPE_HAS_KNOWN_LENGTH(related->un.memb.ptr));
 		struct uniqtype *element_type = is_array ? UNIQTYPE_ARRAY_ELEMENT_TYPE(object_type) : 
@@ -103,22 +108,22 @@ void process_heap_object_recursive(void *object)
 			void *pointed_to_object = *(void**)((char*) object + member_offset);
 			/* Check sanity of the pointer. We might be reading some union'd storage
 			 * that is currently holding a non-pointer. */
-            if ((pointed_to_object != NULL) && IS_PLAUSIBLE_POINTER(pointed_to_object)) {
+            		if ((pointed_to_object != NULL) && IS_PLAUSIBLE_POINTER(pointed_to_object)) {
 				/* add node to queue */
 				enqueue_heap_queue_node(pointed_to_object);
-			} else if (!pointed_to_object || pointed_to_object == (void*) -1) {
+			} else if (!pointed_to_object || pointed_to_object == (void *) -1) {
 				/* null pointer, do nothing */
 			} else {
 				/*debug_print("Warning: insane pointer value %p found in field index %d in object %p, type %s\n",
 					pointed_to_object, i, (char*) obj_start + start_offset, NAME_FOR_UNIQTYPE(t_at_offset));*/
 			}
 			/*if (to_enqueue && to_enqueue->obj) {
-                debug_print("Found a pointed-to object at %p, statically of type %s, added as %p of type %s\n",
-				pointed_to_object, NAME_FOR_UNIQTYPE(pointed_to_static_t), to_enqueue->obj, NAME_FOR_UNIQTYPE(to_enqueue->t));
-            }*/
+                		debug_print("Found a pointed-to object at %p, statically of type %s, added as %p of type %s\n",
+				pointed_to_object, NAME_FOR_UNIQTYPE(pointed_to_static_t), to_enqueue->obj, NAME_FOR_UNIQTYPE(to_enqueue>t));
+            		}*/
 		} else if (UNIQTYPE_IS_COMPOSITE_TYPE(element_type)) { /* Else is it a thing with structure? If so, recurse. */
 			void * subobject_address = (void*) ((char*) object + member_offset);
-            process_heap_object_recursive(subobject_address);
+            		process_heap_object_recursive(subobject_address);
 		}
 	}
 }
@@ -263,6 +268,7 @@ void scan_stack_for_pointers_to_heap(void)
     debug_print("Commencing stack scan...\tStack pointer: %p\tStack base: %p\n", stack_pointer, stack_base);
 
     for (stack_walker; stack_walker<stack_base; stack_walker+=POINTER_SIZE) {
+	debug_print("stack address: %p\tpointer value: %p\n", stack_walker, *((void **) stack_walker));
         heap_block = pointed_to_heap_block(*((void **) stack_walker));
         if (heap_block != NULL) {
             debug_print("Found pointer to heap block %p\n", heap_block);
@@ -347,11 +353,12 @@ void mark_reachable_heap_objects(void)
 {
     void *heap_object;
     while (q_head != NULL) {
-        heap_object = dequeue_heap_queue_node()->heap_object;
+        heap_object = q_head->heap_object;
         if (!marked(heap_object)) {
             process_heap_object_recursive(heap_object);
             mark_block(heap_object);
         }
+	dequeue_heap_queue_node();
     }
 }
 
