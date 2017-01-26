@@ -174,6 +174,7 @@ void *gc_malloc(size_t size)
         debug_print("Malloc failure...\tSize request: %zu\n", size);
         return NULL;
     }
+	memset(block+size, 0x0, INSERT_ADDRESS(block)-(block+size)); // zero out excess bytes in malloc bucket
     PREVIOUS_POINTER(block) = &heap_list_head; // point previous pointer at address of heap_list_head
     NEXT_POINTER(block) = heap_list_head; // point next pointer at address of next block
     if (heap_list_head != NULL) { 
@@ -218,6 +219,7 @@ void *gc_realloc(void *ptr, size_t size)
         NEXT_POINTER(ptr) = next;
         return NULL;
     }
+    memset(new+size, 0x0, INSERT_ADDRESS(new)-(new+size)); // zero out excess bytes in malloc bucket
     // set previous and next block pointers at end of larger block
     PREVIOUS_POINTER(new) = previous;
     NEXT_POINTER(new) = next;
