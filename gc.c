@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <limits.h>
+#include <string.h>
 
 #include "heap_index.h"
 #include "gc.h"
@@ -72,34 +73,56 @@ void dequeue_heap_queue_node(void)
 
 #define IS_PLAUSIBLE_POINTER(p) (!(p) || ((p) == (void*) -1) || (((uintptr_t) (p)) >= 4194304 && ((uintptr_t) (p)) < 0x800000000000ul))
 
-void process_heap_object_recursive(void *object)
+void process_heap_object_recursive(void *object, struct uniqtype *object_type)
 {
-    struct uniqtype *object_type = __liballocs_get_alloc_type(object);
+    struct allocator *a;
+	void *alloc_start;
+	unsigned long alloc_size_bytes;
+	struct uniqtype *alloc_uniqtype = object_type;
+	void *alloc_site;
 
-	if (object_type == &__uniqtype__void) return;
-	if (object_type == NULL) return;
-	if (!UNIQTYPE_HAS_SUBOBJECTS(object_type)) return;
+	if (alloc_uniqtype == NULL) {
+		struct liballocs_err *err = __liballocs_get_alloc_info(object, 
+			&a,
+			&alloc_start,
+			&alloc_size_bytes,
+			&alloc_uniqtype,
+			&alloc_site);
+	
+		assert(err == NULL);
 
-	struct uniqtype_rel_info *related = &object_type->related[0];
+		if (alloc_uniqtype->make_precise != NULL) {
+			alloc_uniqtype = alloc_uniqtype->make_precise(alloc_uniqtype,
+				NULL, 0,
+				(void *) object, (void *) alloc_start, alloc_size_bytes, 
+				__builtin_return_address(0),
+				NULL);
+		}
+	}	
+	
+	if (alloc_uniqtype == &__uniqtype__void) return;
+	if (alloc_uniqtype == NULL) return;
+	if (!UNIQTYPE_HAS_SUBOBJECTS(alloc_uniqtype)) return;
+
+	struct uniqtype_rel_info *related = &alloc_uniqtype->related[0];
 	unsigned members;
 	bool is_array;
 
-	if (UNIQTYPE_IS_COMPOSITE_TYPE(object_type)) {
+	if (UNIQTYPE_IS_COMPOSITE_TYPE(alloc_uniqtype)) {
 		is_array = false;
-		members = UNIQTYPE_COMPOSITE_MEMBER_COUNT(object_type);
-		/* FIXME: toplevel of heap arrays */
+		members = UNIQTYPE_COMPOSITE_MEMBER_COUNT(alloc_uniqtype);
 	} else {
 		is_array = true;
-		members = UNIQTYPE_ARRAY_LENGTH(object_type); /* FIXME: dynamically-sized arrays */
+		members = UNIQTYPE_ARRAY_LENGTH(alloc_uniqtype);
 	}
 
 
 	for (unsigned i=0; i<members; ++i, related += (is_array ? 0 : 1)) {
 		// if we're an array, the element type should have known length (pos_maxoff)
 		assert(!is_array || UNIQTYPE_HAS_KNOWN_LENGTH(related->un.memb.ptr));
-		struct uniqtype *element_type = is_array ? UNIQTYPE_ARRAY_ELEMENT_TYPE(object_type) : 
+		struct uniqtype *element_type = is_array ? UNIQTYPE_ARRAY_ELEMENT_TYPE(alloc_uniqtype) : 
 			related->un.memb.ptr;
-		long member_offset = is_array ? (i * UNIQTYPE_ARRAY_ELEMENT_TYPE(object_type)->pos_maxoff) 
+		long member_offset = is_array ? (i * UNIQTYPE_ARRAY_ELEMENT_TYPE(alloc_uniqtype)->pos_maxoff) 
 			: related->un.memb.off;
 		
 		/* Is it a pointer? If so, add it to the heap object queue. */
@@ -108,22 +131,18 @@ void process_heap_object_recursive(void *object)
 			void *pointed_to_object = *(void**)((char*) object + member_offset);
 			/* Check sanity of the pointer. We might be reading some union'd storage
 			 * that is currently holding a non-pointer. */
-            		if ((pointed_to_object != NULL) && IS_PLAUSIBLE_POINTER(pointed_to_object)) {
+            if ((pointed_to_object != NULL) && IS_PLAUSIBLE_POINTER(pointed_to_object)) {
 				/* add node to queue */
 				enqueue_heap_queue_node(pointed_to_object);
 			} else if (!pointed_to_object || pointed_to_object == (void *) -1) {
 				/* null pointer, do nothing */
 			} else {
-				/*debug_print("Warning: insane pointer value %p found in field index %d in object %p, type %s\n",
-					pointed_to_object, i, (char*) obj_start + start_offset, NAME_FOR_UNIQTYPE(t_at_offset));*/
+				debug_print("Warning: insane pointer value %p found in field index %d in object %p, type %s\n",
+					pointed_to_object, i, object, NAME_FOR_UNIQTYPE(alloc_uniqtype));
 			}
-			/*if (to_enqueue && to_enqueue->obj) {
-                		debug_print("Found a pointed-to object at %p, statically of type %s, added as %p of type %s\n",
-				pointed_to_object, NAME_FOR_UNIQTYPE(pointed_to_static_t), to_enqueue->obj, NAME_FOR_UNIQTYPE(to_enqueue>t));
-            		}*/
 		} else if (UNIQTYPE_IS_COMPOSITE_TYPE(element_type)) { /* Else is it a thing with structure? If so, recurse. */
-			void * subobject_address = (void*) ((char*) object + member_offset);
-            		process_heap_object_recursive(subobject_address);
+			void * subobject_address = (void *) ((char *) object + member_offset);
+            process_heap_object_recursive(subobject_address, element_type); 
 		}
 	}
 }
@@ -357,10 +376,10 @@ void mark_reachable_heap_objects(void)
     while (q_head != NULL) {
         heap_object = q_head->heap_object;
         if (!marked(heap_object)) {
-            process_heap_object_recursive(heap_object);
+            process_heap_object_recursive(heap_object, NULL);
             mark_block(heap_object);
         }
-	dequeue_heap_queue_node();
+		dequeue_heap_queue_node();
     }
 }
 
