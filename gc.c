@@ -134,6 +134,7 @@ void process_heap_object_recursive(void *object, struct uniqtype *object_type)
             if ((pointed_to_object != NULL) && IS_PLAUSIBLE_POINTER(pointed_to_object)) {
 				/* add node to queue */
 				enqueue_heap_queue_node(pointed_to_object);
+				debug_print("Found heap object:\t%p\n", pointed_to_object);
 			} else if (!pointed_to_object || pointed_to_object == (void *) -1) {
 				/* null pointer, do nothing */
 			} else {
@@ -289,7 +290,7 @@ void scan_stack_for_pointers_to_heap(void)
     debug_print("Commencing stack scan...\tStack pointer: %p\tStack base: %p\n", stack_pointer, stack_base);
 
     for (stack_walker; stack_walker<stack_base; stack_walker+=POINTER_SIZE) {
-	debug_print("stack address: %p\tpointer value: %p\n", stack_walker, *((void **) stack_walker));
+		debug_print("stack address: %p\tpointer value: %p\n", stack_walker, *((void **) stack_walker));
         heap_block = pointed_to_heap_block(*((void **) stack_walker));
         if (heap_block != NULL) {
             debug_print("Found pointer to heap block %p\n", heap_block);
@@ -372,19 +373,23 @@ void sweep(void)
 
 void mark_reachable_heap_objects(void)
 {
+	debug_print("Commencing heap object traversal from root set, marking reachable objects...\n");
     void *heap_object;
     while (q_head != NULL) {
         heap_object = q_head->heap_object;
         if (!marked(heap_object)) {
+        	debug_print("Searching heap object %p for pointers to the heap...\n", heap_object);
             process_heap_object_recursive(heap_object, NULL);
             mark_block(heap_object);
         }
 		dequeue_heap_queue_node();
     }
+    debug_print("Heap object traversal from root set complete.\n");
 }
 
 void collect(void)
 {
+	debug_print("Commencing garbage collection...\n");
     assert(q_head == NULL);
     assert(q_tail == NULL);
 
@@ -395,6 +400,7 @@ void collect(void)
     mark_reachable_heap_objects();
 
     sweep();
+    debug_print("Garbage collection complete.\n");
 }
 
 void print_heap(void)
