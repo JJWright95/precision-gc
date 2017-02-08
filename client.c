@@ -1,39 +1,42 @@
 #define _GNU_SOURCE
+
 #include <stdlib.h>
 #include <stdio.h>
 
 #include "gc.h"
-#include "liballocs.h"
 
 struct obj {
-	int i;
+	int *i;
 	double d;
 	short s;
 };
 
 struct obj *objPtr;
 
+void test(void)
+{
+	objPtr = gc_malloc(sizeof(struct obj));
+	objPtr->i = gc_malloc(sizeof(int));
+	*(objPtr->i) = 8;
+}
+
 int main(void)
 {
 	gc_init();
-	printf("Struct object size:\t%d\n", sizeof(struct obj));
-	objPtr = gc_malloc(sizeof(struct obj));
 
-	void *ptr1 = gc_malloc(40);
-	void *ptr2 = gc_malloc(80);
-	void *ptr3 = gc_malloc(120);
-	void *ptr4 = gc_malloc(160);
-
-	assert(objPtr);
-	printf("objPtr address:\t %p\n", objPtr);
-	objPtr->i = 10;
-	objPtr->d = 2.5;
-	objPtr->s = 4;
+	// should not be collected
+	struct obj *obj_ptr = gc_malloc(sizeof(struct obj));
+	int *int_ptr = gc_malloc(sizeof(int));
 	
-	struct uniqtype *u = __liballocs_get_alloc_type(objPtr);
+	// should be collected
+	gc_malloc(sizeof(double));
+	gc_malloc(sizeof(long));
+
+	test();
 
 	print_heap();
-	sweep();
+	collect();
+
 	print_heap();
 
 	return 0;
