@@ -11,7 +11,6 @@
 
 #include "heap_index.h"
 #include "gc.h"
-#include "pointer_macros.h"
 #include "liballocs.h"
 #include "uniqtype.h"
 #include "uniqtype-defs.h"

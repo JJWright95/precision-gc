@@ -5,7 +5,6 @@
 
 #include "heap_index.h"
 #include "gc.h"
-#include "pointer_macros.h"
 
 
 extern void *heap_list_head;
