@@ -21,9 +21,9 @@ export LIBALLOCS_ALLOC_FNS
 unit_test: unit_tester.o gc.o
 	$(CC) $(CFLAGS) -o "$@" unit_tester.o gc.o
 
-unit_tester.o: gc.h pointer_macros.h
+unit_tester.o: gc.h
 
-gc.o: gc.h pointer_macros.h
+gc.o: gc.h
 	$(CC) $(CFLAGS) -c gc.c
 
 .PHONY: clean
