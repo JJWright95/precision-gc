@@ -36,5 +36,5 @@ run: client
 
 .PHONY: test
 test: unit_test
-	./unit_test
+	LD_PRELOAD=/usr/local/src/liballocs/lib/liballocs_preload.so ./unit_test
 	
