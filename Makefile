@@ -4,6 +4,8 @@ CC := /usr/local/src/liballocs/tools/lang/c/bin/allocscc \
 LDFLAGS += -L/usr/local/src/liballocs/src
 LDLIBS += -lallocs
 
+CFLAGS += -DDEFAULT_TRIM_THRESHOLD=MAX_SIZE_T -DHAVE_MMAP=0 -DHAVE_REMAP=0
+
 all: client unit_test
 
 debug: CFLAGS += -g -DDEBUG
@@ -23,8 +25,11 @@ unit_test: unit_tester.o gc.o
 
 unit_tester.o: gc.h
 
-gc.o: gc.h
+gc.o: gc.h 
 	$(CC) $(CFLAGS) -c gc.c
+
+malloc.o: malloc.h
+	$CC$ $(CFLAGS) -c malloc.c
 
 .PHONY: clean
 clean:

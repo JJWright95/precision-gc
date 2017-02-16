@@ -1,4 +1,4 @@
-#include "malloc.h"
+#include "malloc_boehm.h"
 
 /*------------------------------ internal #includes ---------------------- */
 
@@ -1207,6 +1207,14 @@ static struct malloc_state _gm_;
 #endif /* !ONLY_MSPACES */
 
 #define is_initialized(M)  ((M)->top != 0)
+
+/* -------------------------- Free Space Divisor ------------------------- */
+
+/* Determines the fraction by which the heap is to be extened on sys_alloc */
+
+#ifndef FSD
+#define FSD 4
+#endif
 
 /* -------------------------- system alloc setup ------------------------- */
 
@@ -2599,6 +2607,18 @@ static void add_segment(mstate m, char* tbase, size_t tsize, flag_t mmapped) {
   check_top_chunk(m, m->top);
 }
 
+/* -------------------- garbage collection bookkeeping -------------------- */
+
+bool GC_running = false;
+long heap_size;
+long allocated_since_last_GC = 0;
+
+long heap_size(void) 
+{
+  struct mallinfo stats = internal_mallinfo(gm);
+  return stats.uordblks + stats.fordblks; // allocated_space + free_space
+}
+
 /* -------------------------- System allocation -------------------------- */
 
 /* Get memory from system using MORECORE or MMAP */
@@ -2624,6 +2644,13 @@ static void* sys_alloc(mstate m, size_t nb) {
     size_t fp = m->footprint + asize;
     if (fp <= m->footprint || fp > m->footprint_limit)
       return 0;
+  }
+
+  /* If garbage collector is running, always request blocks of 4KB */
+  if (GC_running) {
+    asize = 4096;
+  } else {
+    asize = (heap_size / FSD) + nb;
   }
 
   /*
@@ -3137,6 +3164,8 @@ void* dlmalloc(size_t bytes) {
   ensure_initialization(); /* initialize in sys_alloc if not using locks */
 #endif
 
+  attempt_allocation:
+
   if (!PREACTION(gm)) {
     void* mem;
     size_t nb;
@@ -3235,10 +3264,20 @@ void* dlmalloc(size_t bytes) {
       goto postaction;
     }
 
-    mem = sys_alloc(gm, nb);
+    /* Must decide whether to invoke GC or extend heap.*/
+    heap_size = heap_size();    
+    if (allocated_since_last_GC >= (heap_size / FSD)) {
+        gc_collect();
+        allocated_since_last_GC = 0;
+        goto attempt_allocation;
+      } else { 
+        mem = sys_alloc(gm, nb); 
+      }
+    }
 
   postaction:
     POSTACTION(gm);
+    allocated_since_last_GC += (dlmalloc_usable_size(mem) + 16);
     return mem;
   }
 
@@ -3764,6 +3803,7 @@ void* dlrealloc(void* oldmem, size_t bytes) {
   }
 #endif /* REALLOC_ZERO_BYTES_FREES */
   else {
+    long old_size = dlmalloc_usable_size(oldmem);
     size_t nb = request2size(bytes);
     mchunkptr oldp = mem2chunk(oldmem);
 #if ! FOOTERS
@@ -3776,11 +3816,13 @@ void* dlrealloc(void* oldmem, size_t bytes) {
     }
 #endif /* FOOTERS */
     if (!PREACTION(m)) {
+      long new_size = 0;;
       mchunkptr newp = try_realloc_chunk(m, oldp, nb, 1);
       POSTACTION(m);
       if (newp != 0) {
         check_inuse_chunk(m, newp);
         mem = chunk2mem(newp);
+        new_size = dlmalloc_usable_size(mem);
       }
       else {
         mem = internal_malloc(m, bytes);
@@ -3788,8 +3830,12 @@ void* dlrealloc(void* oldmem, size_t bytes) {
           size_t oc = chunksize(oldp) - overhead_for(oldp);
           memcpy(mem, oldmem, (oc < bytes)? oc : bytes);
           internal_free(m, oldmem);
+          new_size = dlmalloc_usable_size(mem);
         }
       }
+      if (new_size > 0) {
+        allocated_since_last_GC += (new_size - old_size);
+      } 
     }
   }
   return mem;
