@@ -33,6 +33,7 @@ void scan_stack_for_pointers_to_heap(void);
 void scan_data_segment_for_pointers_to_heap(void);
 void scan_bss_segment_for_pointers_to_heap(void);
 void sweep(void);
+void gc_collect(void);
 void print_heap(void);
 
 #endif

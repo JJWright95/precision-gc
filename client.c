@@ -35,7 +35,7 @@ int main(void)
 	test();
 
 	print_heap();
-	collect();
+	gc_collect();
 
 	print_heap();
 

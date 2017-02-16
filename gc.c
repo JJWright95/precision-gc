@@ -24,6 +24,8 @@
 
 #define debug_print(...) do { if (DEBUG_TEST) fprintf(stderr, ##__VA_ARGS__); } while (0)
 
+extern bool GC_running;
+
 /* The garbage collected heap is stored as a doubly linked list */
 void *heap_list_head = NULL;
 void *stack_base = NULL;
@@ -386,8 +388,9 @@ void mark_reachable_heap_objects(void)
     debug_print("Heap object traversal from root set complete.\n");
 }
 
-void collect(void)
+void gc_collect(void)
 {
+    GC_running = true;
 	debug_print("Commencing garbage collection...\n");
     assert(q_head == NULL);
     assert(q_tail == NULL);
@@ -400,6 +403,7 @@ void collect(void)
 
     sweep();
     debug_print("Garbage collection complete.\n");
+    GC_running = false;
 }
 
 void print_heap(void)
