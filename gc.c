@@ -2,15 +2,16 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <malloc.h>
 #include <assert.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <limits.h>
 #include <string.h>
+#include <fcntl.h>
 
 #include "heap_index.h"
 #include "gc.h"
+#include "malloc.h"
 #include "liballocs.h"
 #include "uniqtype.h"
 #include "uniqtype-defs.h"
@@ -151,17 +152,47 @@ void process_heap_object_recursive(void *object, struct uniqtype *object_type)
 
 void gc_init(void)
 {
-    // http://man7.org/linux/man-pages/man5/proc.5.html Bottom of stack: 28th value in /proc/self/stat
-    FILE *process_stats_fp;
-    process_stats_fp = fopen("/proc/self/stat", "r");
-    assert(process_stats_fp != NULL);
+    /* Number of fields preceding startstack field in /proc/self/stat */
+    #define STAT_SKIP 27   
 
-    fscanf(process_stats_fp,
-           "%*d %*s %*c %*d %*d %*d %*d %*d %*u "
-           "%*u %*u %*u %*u %*u %*u %*d %*d "
-           "%*d %*d %*d %*d %*u %*u %*d "
-           "%*u %*u %*u %lu", (uintptr_t *) &stack_base);
-    fclose(process_stats_fp);
+    /* Read the stack base value from /proc/self/stat using direct */
+    /* I/O system calls in order to avoid calling malloc. */
+    #define STAT_BUF_SIZE 4096
+
+    char stat_buf[STAT_BUF_SIZE];
+    int process_stats_fd;
+    int i;
+    int buf_offset = 0;
+    int file_length;
+
+    process_stats_fd = open("/proc/self/stat", O_RDONLY);
+    assert(process_stats_fd >= 0);
+    file_length = read(process_stats_fd, stat_buf, STAT_BUF_SIZE);
+    close(process_stats_fd);
+
+    /* Skip the required number of fields. */
+    for (i=0; i<STAT_SKIP; ++i) {
+      while (buf_offset < file_length && isspace(stat_buf[buf_offset++])) {
+        /* empty */
+      }
+      while (buf_offset < file_length && !isspace(stat_buf[buf_offset++])) {
+        /* empty */
+      }
+    }
+    /* Skip spaces. */
+    while (buf_offset < file_length && isspace(stat_buf[buf_offset])) {
+      buf_offset++;
+    }
+    /* Find the end of the number and cut the buffer there. */
+    for (i=0; buf_offset+i < file_length; i++) {
+      if (!isdigit(stat_buf[buf_offset+i])) break;
+    }
+    assert(buf_offset+i < file_length);
+    stat_buf[buf_offset+i] = '\0';
+
+    /* Convert address string to base 10 digits. */
+    stack_base = (void *) strtoull(&stat_buf[buf_offset], NULL, 10);
+    assert((uintptr_t) stack_base > 0x100000 && ((uintptr_t) stack_base & (sizeof(void *)-1)) == 0);
     debug_print("Base of stack: %p\n", stack_base);
 }
 
@@ -195,6 +226,8 @@ void *gc_malloc(size_t size)
         debug_print("Malloc failure...\tSize request: %zu\n", size);
         return NULL;
     }
+    debug_print("%d\n", malloc_usable_size(block));
+    debug_print("%p\n", INSERT_ADDRESS(block));
 	memset(block+size, 0x0, INSERT_ADDRESS(block)-(block+size)); // zero out excess bytes in malloc bucket
     PREVIOUS_POINTER(block) = &heap_list_head; // point previous pointer at address of heap_list_head
     NEXT_POINTER(block) = heap_list_head; // point next pointer at address of next block
@@ -378,7 +411,8 @@ void mark_reachable_heap_objects(void)
     void *heap_object;
     while (q_head != NULL) {
         heap_object = q_head->heap_object;
-        if (!marked(heap_object)) {
+        // 0xccccccccccccccccc is sentinel value if not a GC'd object
+        if (!marked(heap_object) && PREVIOUS_POINTER(heap_object) != 0xcccccccccccccccc) {
         	debug_print("Searching heap object %p for pointers to the heap...\n", heap_object);
             process_heap_object_recursive(heap_object, NULL);
             mark_block(heap_object);
