@@ -2,6 +2,8 @@
 
 /*------------------------------ internal #includes ---------------------- */
 
+#include <stdbool.h>
+
 #ifdef _MSC_VER
 #pragma warning( disable : 4146 ) /* no "unsigned" warnings */
 #endif /* _MSC_VER */
@@ -2609,11 +2611,12 @@ static void add_segment(mstate m, char* tbase, size_t tsize, flag_t mmapped) {
 
 /* -------------------- garbage collection bookkeeping -------------------- */
 
+extern GC_initialised;
 bool GC_running = false;
 long heap_size;
 long allocated_since_last_GC = 0;
 
-long heap_size(void) 
+long get_heap_size(void) 
 {
   struct mallinfo stats = internal_mallinfo(gm);
   return stats.uordblks + stats.fordblks; // allocated_space + free_space
@@ -2646,10 +2649,11 @@ static void* sys_alloc(mstate m, size_t nb) {
       return 0;
   }
 
-  /* If garbage collector is running, always request blocks of 4KB */
-  if (GC_running) {
-    asize = 4096;
-  } else {
+  /* Should never be called when GC is running. */
+  assert(!GC_running);
+  
+  /* Increase size of heap. */  
+  if (is_initialized(m)) {
     asize = (heap_size / FSD) + nb;
   }
 
@@ -3265,14 +3269,13 @@ void* dlmalloc(size_t bytes) {
     }
 
     /* Must decide whether to invoke GC or extend heap.*/
-    heap_size = heap_size();    
-    if (allocated_since_last_GC >= (heap_size / FSD)) {
-        gc_collect();
-        allocated_since_last_GC = 0;
-        goto attempt_allocation;
-      } else { 
-        mem = sys_alloc(gm, nb); 
-      }
+    heap_size = get_heap_size();    
+    if (allocated_since_last_GC >= (heap_size / FSD) && GC_initialised) {
+      	gc_collect();
+      	allocated_since_last_GC = 0;
+    	goto attempt_allocation;
+    } else { 
+    	mem = sys_alloc(gm, nb); 
     }
 
   postaction:
