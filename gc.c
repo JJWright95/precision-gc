@@ -26,6 +26,11 @@
 #define debug_print(...) do { if (DEBUG_TEST) fprintf(stderr, ##__VA_ARGS__); } while (0)
 
 extern bool GC_running;
+bool GC_initialised = false;
+
+/* Private liballocs allocator for GC helper structures. */
+extern void *__private_malloc(size_t size);
+extern void __private_free(void *ptr);
 
 /* The garbage collected heap is stored as a doubly linked list */
 void *heap_list_head = NULL;
@@ -48,7 +53,7 @@ struct q_node *q_tail = NULL;
 
 void enqueue_heap_queue_node(void *heap_pointer)
 {
-    struct q_node *node = malloc(sizeof(struct q_node));
+    struct q_node *node = __private_malloc(sizeof(struct q_node));
     node->heap_object = heap_pointer;
     node->next = NULL;
     if (q_tail == NULL) {
@@ -69,7 +74,7 @@ void dequeue_heap_queue_node(void)
         if (q_head == NULL) {
             q_tail = NULL;
         } 
-        free(old_head);
+        __private_free(old_head);
     }
 }
 
@@ -193,6 +198,7 @@ void gc_init(void)
     /* Convert address string to base 10 digits. */
     stack_base = (void *) strtoull(&stat_buf[buf_offset], NULL, 10);
     assert((uintptr_t) stack_base > 0x100000 && ((uintptr_t) stack_base & (sizeof(void *)-1)) == 0);
+    GC_initialised = true;
     debug_print("Base of stack: %p\n", stack_base);
 }
 
