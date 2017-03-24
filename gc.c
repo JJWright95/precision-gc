@@ -11,7 +11,12 @@
 
 #include "heap_index.h"
 #include "gc.h"
-#include "malloc.h"
+#include "dlmalloc.h"
+void *mymalloc(size_t);
+void *myrealloc(void*, size_t);
+void myfree(void*);
+size_t mymalloc_usable_size(void*);
+
 #include "liballocs.h"
 #include "uniqtype.h"
 #include "uniqtype-defs.h"
@@ -25,6 +30,8 @@
 
 #define debug_print(...) do { if (DEBUG_TEST) fprintf(stderr, ##__VA_ARGS__); } while (0)
 
+extern long get_heap_size(void);
+static int num_collections = 0; 
 extern bool GC_running;
 bool GC_initialised = false;
 
@@ -139,6 +146,7 @@ void process_heap_object_recursive(void *object, struct uniqtype *object_type)
 			/* Check sanity of the pointer. We might be reading some union'd storage
 			 * that is currently holding a non-pointer. */
             if ((pointed_to_object != NULL) && IS_PLAUSIBLE_POINTER(pointed_to_object)) {
+            	// FIXME: ask liballocs if pointer was handed back by mymalloc 
 				/* add node to queue */
 				enqueue_heap_queue_node(pointed_to_object);
 				debug_print("Found heap object:\t%p\n", pointed_to_object);
@@ -225,16 +233,17 @@ void unmark_block(void *block)
     PREVIOUS_POINTER(block) = (void *) ((uintptr_t) PREVIOUS_POINTER(block) & -2);
 }
 
+extern void *__mymalloc_lowest, *__mymalloc_highest;
 void *gc_malloc(size_t size)
 {
-    void *block = malloc(size);
+    void *block = mymalloc(size);
     if (block == NULL) {
         debug_print("Malloc failure...\tSize request: %zu\n", size);
         return NULL;
     }
-    debug_print("%d\n", malloc_usable_size(block));
-    debug_print("%p\n", INSERT_ADDRESS(block));
-	memset(block+size, 0x0, INSERT_ADDRESS(block)-(block+size)); // zero out excess bytes in malloc bucket
+	if ((char*) block < __mymalloc_lowest) __mymalloc_lowest = block;
+	if ((char*) block > __mymalloc_highest) __mymalloc_highest = block;
+    memset(block, 0x0, INSERT_ADDRESS(block)-block); // zero out all bytes to prevent uninitialised address ghosting
     PREVIOUS_POINTER(block) = &heap_list_head; // point previous pointer at address of heap_list_head
     NEXT_POINTER(block) = heap_list_head; // point next pointer at address of next block
     if (heap_list_head != NULL) { 
@@ -242,7 +251,7 @@ void *gc_malloc(size_t size)
     }
     heap_list_head = block; // new block at beginning of linked list
     debug_print("Block allocated...\tAddress:%p\tSize: %zu\tPrevious: %p\tNext: %p\n", 
-            block, malloc_usable_size(block), PREVIOUS_POINTER(block), NEXT_POINTER(block));
+    		block, mymalloc_usable_size(block), PREVIOUS_POINTER(block), NEXT_POINTER(block));
     return block;
 }
 
@@ -264,14 +273,14 @@ void *gc_realloc(void *ptr, size_t size)
         if (next != NULL) {
             PREVIOUS_POINTER(next) = previous;
         }
-        free(ptr);
+        myfree(ptr);
         return NULL;
     }
     // clear previous and next pointers in original, small block
     PREVIOUS_POINTER(ptr) = (void *) 0;
     NEXT_POINTER(ptr) = (void *) 0;
     // request a new, larger block of memory.
-    void *new = realloc(ptr, size);
+    void *new = myrealloc(ptr, size);
     // if realloc failed, return NULL
     if (new == NULL) {
         debug_print("Realloc failure...\tPointer: %p\tSize request: %zu\n", ptr, size);
@@ -279,14 +288,14 @@ void *gc_realloc(void *ptr, size_t size)
         NEXT_POINTER(ptr) = next;
         return NULL;
     }
-    memset(new+size, 0x0, INSERT_ADDRESS(new)-(new+size)); // zero out excess bytes in malloc bucket
+    memset(new, 0x0, INSERT_ADDRESS(new)-new); // zero out all bytes to prevent uninitialised address ghosting
     // set previous and next block pointers at end of larger block
     PREVIOUS_POINTER(new) = previous;
     NEXT_POINTER(new) = next;
     // if data was not moved simply return old pointer
     if (ptr == new) {
         debug_print("Block resized in place...\tAddress: %p\tSize: %zu\tPrevious: %p\tNext: %p\n",
-                ptr, malloc_usable_size(new), previous, next);
+                ptr, mymalloc_usable_size(new), previous, next);
         return ptr;
     }
     // if get here, data has been moved. Update previous and next block pointers
@@ -299,7 +308,7 @@ void *gc_realloc(void *ptr, size_t size)
         PREVIOUS_POINTER(next) = new;
     }
     debug_print("Block resized, moved to new location...\tAddress: %p\tSize: %zu\tPrevious: %p\tNext: %p\n",
-            new, malloc_usable_size(new), previous, next);
+            new, mymalloc_usable_size(new), previous, next);
     return new;
 }
 
@@ -404,7 +413,7 @@ void sweep(void)
                     mark_block(next);
                 }
             }
-            free(current);
+            myfree(current);
         }
         current = next;
     }
@@ -431,6 +440,7 @@ void mark_reachable_heap_objects(void)
 void gc_collect(void)
 {
     GC_running = true;
+    num_collections++;
 	debug_print("Commencing garbage collection...\n");
     assert(q_head == NULL);
     assert(q_tail == NULL);
@@ -457,4 +467,14 @@ void print_heap(void)
         printf("Address: %p\tMarked: %d\n", current, marked(current));
         current = NEXT_POINTER(current);
     }
+}
+
+int GC_num_collections(void)
+{
+	return num_collections;
+}
+
+long GC_heap_size(void)
+{
+	return get_heap_size();
 }
