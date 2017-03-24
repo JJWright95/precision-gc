@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+size_t mymalloc_usable_size(void*);
+void *mymalloc(size_t);
 /*
 gc_malloc memory block layout:
 
@@ -16,11 +18,17 @@ gc_malloc memory block layout:
 
 #define POINTER_SIZE sizeof(void *)
 
-#define INSERT_ADDRESS(BLOCK_ADDRESS) ((void *) ((char *) insert_for_chunk_and_usable_size(BLOCK_ADDRESS, malloc_usable_size(BLOCK_ADDRESS))  -2*POINTER_SIZE))
+#define INSERT_ADDRESS(BLOCK_ADDRESS) ((void *) ((char *) insert_for_chunk_and_usable_size(BLOCK_ADDRESS, mymalloc_usable_size(BLOCK_ADDRESS))  -2*POINTER_SIZE))
 
-#define PREVIOUS_POINTER(BLOCK_ADDRESS) (*((void **) ((char *) insert_for_chunk_and_usable_size(BLOCK_ADDRESS, malloc_usable_size(BLOCK_ADDRESS)) - 2*POINTER_SIZE)))
+#define PREVIOUS_POINTER(BLOCK_ADDRESS) (*((void **) ((char *) insert_for_chunk_and_usable_size(BLOCK_ADDRESS, mymalloc_usable_size(BLOCK_ADDRESS)) - 2*POINTER_SIZE)))
 
-#define NEXT_POINTER(BLOCK_ADDRESS) (*((void **) ((char *) insert_for_chunk_and_usable_size(BLOCK_ADDRESS, malloc_usable_size(BLOCK_ADDRESS)) -POINTER_SIZE)))
+#define NEXT_POINTER(BLOCK_ADDRESS) (*((void **) ((char *) insert_for_chunk_and_usable_size(BLOCK_ADDRESS, mymalloc_usable_size(BLOCK_ADDRESS)) -POINTER_SIZE)))
+
+#define GC_INIT gc_init
+#define GC_MALLOC gc_malloc
+#define GC_REALLOC gc_realloc
+#define GC_NEW(OBJECT) (GC_MALLOC(sizeof(OBJECT)))
+#define GC_MALLOC_ATOMIC GC_MALLOC
 
 void gc_init(void);
 bool marked(void *block);
@@ -35,5 +43,7 @@ void scan_bss_segment_for_pointers_to_heap(void);
 void sweep(void);
 void gc_collect(void);
 void print_heap(void);
+int GC_num_collections(void);
+long GC_heap_size(void);
 
 #endif
