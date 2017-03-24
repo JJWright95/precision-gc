@@ -1,4 +1,4 @@
-#include "malloc.h"
+#include "dlmalloc.h"
 
 /*------------------------------ internal #includes ---------------------- */
 
@@ -2483,6 +2483,14 @@ static void init_top(mstate m, mchunkptr p, size_t psize) {
   /* set size of fake trailing chunk holding overhead space only once */
   chunk_plus_offset(p, psize)->head = TOP_FOOT_SIZE;
   m->trim_check = mparams.trim_threshold; /* reset on each update */
+  //check_top_chunk(m, p);
+  size_t  sz = p->head & ~INUSE_BITS; /* third-lowest bit can be set! */
+  assert((is_aligned(chunk2mem(p))) || (p->head == FENCEPOST_HEAD));
+  assert(ok_address(m, p));
+  assert(sz == m->topsize);
+  assert(sz > 0);
+  assert(pinuse(p));
+  assert(!pinuse(chunk_plus_offset(p, sz)));  
 }
 
 /* Initialize bins for a new mstate that is otherwise zeroed out */
@@ -2611,10 +2619,10 @@ static void add_segment(mstate m, char* tbase, size_t tsize, flag_t mmapped) {
 
 /* -------------------- garbage collection bookkeeping -------------------- */
 
-extern GC_initialised;
+extern bool GC_initialised;
 bool GC_running = false;
-long heap_size;
-long allocated_since_last_GC = 0;
+static long heap_size;
+static long allocated_since_last_GC = 0;
 
 long get_heap_size(void) 
 {
@@ -2655,6 +2663,8 @@ static void* sys_alloc(mstate m, size_t nb) {
   /* Increase size of heap. */  
   if (is_initialized(m)) {
     asize = (heap_size / FSD) + nb;
+    int remainder = asize % 16;
+    asize += (16-remainder);
   }
 
   /*
@@ -3269,8 +3279,9 @@ void* dlmalloc(size_t bytes) {
     }
 
     /* Must decide whether to invoke GC or extend heap.*/
-    heap_size = get_heap_size();    
-    if (allocated_since_last_GC >= (heap_size / FSD) && GC_initialised) {
+    assert(!GC_running);
+    heap_size = get_heap_size();
+    if (allocated_since_last_GC > (heap_size / FSD) && GC_initialised) {
       	gc_collect();
       	allocated_since_last_GC = 0;
     	goto attempt_allocation;
