@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <assert.h>
-#include <malloc.h>
 #include <stdint.h>
 
 #include "heap_index.h"
 #include "gc.h"
+#include "dlmalloc.h"
 
 
 extern void *heap_list_head;
