@@ -17,7 +17,7 @@ LDLIBS += -lallocs \
 all: synth_mem_mine unit_test gc_bench
 
 mymalloc_usable_size.o: CC := cc
-mymalloc_usable_size.o: CFLAGS += -I$(LIBALLOCS)/include -std=c11 -g
+mymalloc_usable_size.o: CFLAGS += -I$(LIBALLOCS)/include -std=c11
 
 debug: CFLAGS += -g -DDEBUG
 debug: synth_mem_mine unit_test gc_bench
@@ -80,7 +80,7 @@ gc.o: gc.h
 	$(CC) $(CFLAGS) -c gc.c -O2
 
 dlmalloc.o: dlmalloc.h
-	$(CC) $(CFLAGS) -c dlmalloc.c -DUSE_DL_PREFIX -DDEFAULT_TRIM_THRESHOLD=MAX_SIZE_T -DDEFAULT_MMAP_THRESHOLD=MAX_SIZE_T -DHAVE_REMAP=0 -DHAVE_MORECORE=0 -DMEM_COUNT -O2
+	$(CC) $(CFLAGS) -c dlmalloc.c -DUSE_DL_PREFIX -DDEFAULT_TRIM_THRESHOLD=MAX_SIZE_T -DDEFAULT_MMAP_THRESHOLD=MAX_SIZE_T -DHAVE_REMAP=0 -DHAVE_MORECORE=0 -O2
 
 
 vpath %.c $(LIBMALLOCHOOKS)
