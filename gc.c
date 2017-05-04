@@ -371,21 +371,6 @@ bool points_to_heap_object(void *pointer)
     return false;
 }
 
-/*bool *points_to_heap_block(void *pointer)
-{
-    void *heap_block = heap_list_head;
-    if (heap_block == NULL) {
-        return false;
-    }
-    while (heap_block != NULL) {
-        if (pointer == heap_block) {
-            return true;
-        }
-        heap_block = NEXT_POINTER(heap_block);
-    }
-    return false;
-}*/
-
 void scan_stack_for_pointers_to_heap(void)
 {
     void *stack_pointer;
