@@ -312,24 +312,23 @@ void *gc_realloc(void *ptr, size_t size)
     return new;
 }
 
-void *pointed_to_heap_block(void *pointer)
+bool points_to_heap_object(void *pointer)
 {
     void *heap_block = heap_list_head;
     if (heap_block == NULL) {
-        return NULL;
+        return false;
     }
     while (heap_block != NULL) {
-        if (pointer >= heap_block && pointer < INSERT_ADDRESS(heap_block)) {
-            return heap_block;
+        if (pointer == heap_block) {
+            return true;
         }
         heap_block = NEXT_POINTER(heap_block);
     }
-    return NULL;
+    return false;
 }
 
 void scan_stack_for_pointers_to_heap(void)
 {
-    void *heap_block = NULL;
     void *stack_pointer;
     asm volatile ("movq %%rsp, %0" : "=r" (stack_pointer)); // 'movq' and 'rsp' required for 64-bit
     void *stack_walker = stack_pointer;
@@ -340,10 +339,9 @@ void scan_stack_for_pointers_to_heap(void)
 
     for (stack_walker; stack_walker<stack_base; stack_walker+=POINTER_SIZE) {
 		debug_print("stack address: %p\tpointer value: %p\n", stack_walker, *((void **) stack_walker));
-        heap_block = pointed_to_heap_block(*((void **) stack_walker));
-        if (heap_block != NULL) {
-            debug_print("Found pointer to heap block %p\n", heap_block);
-            enqueue_heap_queue_node(heap_block);
+        if (points_to_heap_object(*((void **) stack_walker))) {
+            debug_print("Found pointer to heap block %p\n", *((void **) stack_walker));
+            enqueue_heap_queue_node(*((void **) stack_walker));
         }
     }
     debug_print("Stack scan complete\n");
@@ -352,15 +350,13 @@ void scan_stack_for_pointers_to_heap(void)
 void scan_data_segment_for_pointers_to_heap(void)
 {
     debug_print("Commencing .data scan...\tdata_start: %p\tedata: %p\n", &data_start, &edata);
-    void *heap_block = NULL;
     void *segment_walker = &data_start;
 
     for (segment_walker; segment_walker<(void *)&edata; segment_walker+=POINTER_SIZE) {
         debug_print(".data walker address: %p\tpointer value: %p\n", segment_walker, *((void **) segment_walker));
-        heap_block = pointed_to_heap_block(*((void **) segment_walker));
-        if (heap_block != NULL) {
-            debug_print("Found pointer to heap block %p\n", heap_block);
-            enqueue_heap_queue_node(heap_block);
+        if (points_to_heap_object(*((void **) segment_walker))) {
+            debug_print("Found pointer to heap block %p\n", *((void **) segment_walker));
+            enqueue_heap_queue_node(*((void **) segment_walker));
         }
     }
     debug_print(".data scan complete\n");
@@ -369,18 +365,16 @@ void scan_data_segment_for_pointers_to_heap(void)
 void scan_bss_segment_for_pointers_to_heap(void)
 {
     debug_print("Commencing .bss scan...\t__bss_start: %p\tend: %p\n", &__bss_start, &end);
-    void *heap_block = NULL;
     void *segment_walker = &__bss_start;
 
     for (segment_walker; segment_walker<(void *)&end; segment_walker+=POINTER_SIZE) {
         debug_print(".bss walker address: %p\tpointer value: %p\n", segment_walker, *((void **) segment_walker));
-        heap_block = pointed_to_heap_block(*((void **) segment_walker));
-        if (heap_block != NULL) {
-            if (segment_walker == &heap_list_head && heap_block == heap_list_head) {
+        if (points_to_heap_object(*((void **) segment_walker))) {
+            if (segment_walker == &heap_list_head && *((void **) segment_walker) == heap_list_head) {
                 continue;
             }
-            debug_print("Found pointer to heap block %p\n", heap_block);
-            enqueue_heap_queue_node(heap_block);
+            debug_print("Found pointer to heap block %p\n", *((void **) segment_walker));
+            enqueue_heap_queue_node(*((void **) segment_walker));
         }
     }
     debug_print(".bss scan complete\n");
