@@ -85,7 +85,7 @@ void dequeue_heap_queue_node(void)
     }
 }
 
-#define IS_PLAUSIBLE_POINTER(p) (!(p) || ((p) == (void*) -1) || (((uintptr_t) (p)) >= 4194304 && ((uintptr_t) (p)) < 0x800000000000ul))
+#define IS_PLAUSIBLE_POINTER(p) (((uintptr_t) (p)) >= 4194304 && ((uintptr_t) (p)) < 0x800000000000ul)
 
 void process_heap_object_recursive(void *object, struct uniqtype *object_type)
 {
@@ -146,18 +146,19 @@ void process_heap_object_recursive(void *object, struct uniqtype *object_type)
 			/* Check sanity of the pointer. We might be reading some union'd storage
 			 * that is currently holding a non-pointer. */
             if ((pointed_to_object != NULL) && IS_PLAUSIBLE_POINTER(pointed_to_object)) {
-            	// FIXME: ask liballocs if pointer was handed back by mymalloc 
-				/* add node to queue */
-				enqueue_heap_queue_node(pointed_to_object);
-				debug_print("Found heap object:\t%p\n", pointed_to_object);
+            	if (points_to_heap_object(pointed_to_object)) {
+                    /* add node to queue */
+				    enqueue_heap_queue_node(pointed_to_object);
+				    debug_print("Found heap object:\t%p\n", pointed_to_object);
+                }
 			} else if (!pointed_to_object || pointed_to_object == (void *) -1) {
 				/* null pointer, do nothing */
 			} else {
 				debug_print("Warning: insane pointer value %p found in field index %d in object %p, type %s\n",
 					pointed_to_object, i, object, NAME_FOR_UNIQTYPE(alloc_uniqtype));
 			}
-		} else if (UNIQTYPE_IS_COMPOSITE_TYPE(element_type)) { /* Else is it a thing with structure? If so, recurse. */
-			void * subobject_address = (void *) ((char *) object + member_offset);
+		} else if (UNIQTYPE_HAS_SUBOBJECTS(element_type)) { /* Else is it a thing with structure? If so, recurse. */
+			void *subobject_address = (void *) ((char *) object + member_offset);
             process_heap_object_recursive(subobject_address, element_type); 
 		}
 	}
@@ -312,20 +313,48 @@ void *gc_realloc(void *ptr, size_t size)
     return new;
 }
 
-void *pointed_to_heap_block(void *pointer)
+bool points_to_heap_object(void *pointer)
+{
+	if (IS_PLAUSIBLE_POINTER(pointer)) {
+
+        struct allocator *a = NULL;
+	    void *alloc_start = NULL;
+	    unsigned long alloc_size_bytes = 0;
+	    struct uniqtype *alloc_uniqtype = NULL;
+	    void *alloc_site = NULL;
+
+		__liballocs_get_alloc_info(pointer, // Don't care about error return type 
+			&a,
+			&alloc_start,
+			&alloc_size_bytes,
+			&alloc_uniqtype,
+			&alloc_site);
+        
+        /* Valid mymalloc pointer if allocator is generic_malloc and block has non-zero size */
+        /* Only care about pointers to start of chunk, user must have valid reference to alloc_start */
+        if (a == &__generic_malloc_allocator 
+            && alloc_size_bytes != 0 
+            && pointer == alloc_start) {
+            return true;
+        }           
+    }
+    return false;
+}
+
+/*bool *points_to_heap_block(void *pointer)
 {
     void *heap_block = heap_list_head;
     if (heap_block == NULL) {
-        return NULL;
+        return false;
     }
     while (heap_block != NULL) {
-        if (pointer >= heap_block && pointer < INSERT_ADDRESS(heap_block)) {
-            return heap_block;
+        if (pointer == heap_block) {
+            return true;
         }
         heap_block = NEXT_POINTER(heap_block);
     }
-    return NULL;
-}
+    return false;
+}*/
 
 void scan_stack_for_pointers_to_heap(void)
 {
