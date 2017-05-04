@@ -2630,6 +2630,17 @@ long get_heap_size(void)
   return stats.uordblks + stats.fordblks; // allocated_space + free_space
 }
 
+
+/* ----------------------- counting memory in-use ------------------------ */
+
+FILE *mem_count_fp = NULL;
+
+long get_allocated_bytes(void) 
+{
+  struct mallinfo stats = internal_mallinfo(gm);
+  return stats.uordblks;
+}
+
 /* -------------------------- System allocation -------------------------- */
 
 /* Get memory from system using MORECORE or MMAP */
@@ -3292,6 +3303,9 @@ void* dlmalloc(size_t bytes) {
   postaction:
     POSTACTION(gm);
     allocated_since_last_GC += (dlmalloc_usable_size(mem) + 16);
+    #ifdef MEM_COUNT
+    	fprintf(mem_count_fp, "%ld\n", get_allocated_bytes());
+    #endif
     return mem;
   }
 
@@ -3849,6 +3863,9 @@ void* dlrealloc(void* oldmem, size_t bytes) {
       }
       if (new_size > 0) {
         allocated_since_last_GC += (new_size - old_size);
+        #ifdef MEM_COUNT
+        	fprintf(mem_count_fp, "%ld\n", get_allocated_bytes());
+        #endif
       } 
     }
   }
