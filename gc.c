@@ -20,6 +20,8 @@ size_t mymalloc_usable_size(void*);
 #include "liballocs.h"
 #include "uniqtype.h"
 #include "uniqtype-defs.h"
+#include "pageindex.h"
+#include "vas.h"
 
 
 #ifdef DEBUG
@@ -40,8 +42,7 @@ extern void *__private_malloc(size_t size);
 extern void __private_free(void *ptr);
 
 /* Bigallocation bitmap cache */
-unsigned long *big_allocation_bitmap = NULL;
-extern bigalloc_num_t *pageindex;
+unsigned long *bigalloc_bitmap = NULL;
 
 /* The garbage collected heap is stored as a doubly linked list */
 void *heap_list_head = NULL;
@@ -89,7 +90,7 @@ void dequeue_heap_queue_node(void)
     }
 }
 
-#define IS_PLAUSIBLE_POINTER(p) (!(p) || ((p) == (void*) -1) || (((uintptr_t) (p)) >= 4194304 && ((uintptr_t) (p)) < 0x800000000000ul))
+#define IS_PLAUSIBLE_POINTER(p) (((uintptr_t) (p)) >= 4194304 && ((uintptr_t) (p)) < 0x800000000000ul)
 
 void process_heap_object_recursive(void *object, struct uniqtype *object_type)
 {
@@ -160,19 +161,11 @@ void process_heap_object_recursive(void *object, struct uniqtype *object_type)
 				debug_print("Warning: insane pointer value %p found in field index %d in object %p, type %s\n",
 					pointed_to_object, i, object, NAME_FOR_UNIQTYPE(alloc_uniqtype));
 			}
-		} else if (UNIQTYPE_IS_COMPOSITE_TYPE(element_type)) { /* Else is it a thing with structure? If so, recurse. */
-			void * subobject_address = (void *) ((char *) object + member_offset);
+		} else if (UNIQTYPE_HAS_SUBOBJECTS(element_type)) { /* Else is it a thing with structure? If so, recurse. */
+			void *subobject_address = (void *) ((char *) object + member_offset);
             process_heap_object_recursive(subobject_address, element_type); 
 		}
 	}
-}
-
-void gc_init(void)
-{
-    init_stack_base();
-    init_bigallocation_bitmap();
-    GC_initialised = true;
-    debug_print("Base of stack: %p\n", stack_base); 
 }
 
 void init_stack_base(void)
@@ -220,12 +213,20 @@ void init_stack_base(void)
     assert((uintptr_t) stack_base > 0x100000 && ((uintptr_t) stack_base & (sizeof(void *)-1)) == 0);
 }
 
-void init_bigallocaiton_bitmap(void)
+void init_bigalloc_bitmap(void)
 {
     /* Bitmap has size 4096 bits */
     #define BITMAP_SIZE 64
-    big_allcoaiton_bitmap = __private_malloc(BITMAP_SIZE*sizeof(unsigned long));
-    memset(big_allocation_bitmap, 0x0, BITMAP_SIZE*sizeof(unsigned long));
+    bigalloc_bitmap = __private_malloc(BITMAP_SIZE*sizeof(unsigned long));
+    memset(bigalloc_bitmap, 0x0, BITMAP_SIZE*sizeof(unsigned long));
+}
+
+void gc_init(void)
+{
+    init_stack_base();
+    init_bigalloc_bitmap();
+    GC_initialised = true;
+    debug_print("Base of stack: %p\n", stack_base); 
 }
 
 /*
@@ -269,11 +270,11 @@ void *gc_malloc(size_t size)
         PREVIOUS_POINTER(heap_list_head) = block; // point previous pointer of next block at new block
     }
     heap_list_head = block; // new block at beginning of linked list
-    debug_print("Block allocated...\tAddress:%p\tSize: %zu\tPrevious: %p\tNext: %p\n", 
+    debug_print("Block allocated...\tAddress: %p\tSize: %zu\tPrevious: %p\tNext: %p\n", 
     		block, mymalloc_usable_size(block), PREVIOUS_POINTER(block), NEXT_POINTER(block));
 
     /* Update bigallocation bitmap */
-    set_bit(pageindex[block>>12]);
+    bigalloc_bitmap_set(pageindex[PAGENUM(block)]); // PAGENUM defined in vas.h
 
     return block;
 }
@@ -283,6 +284,7 @@ void *gc_realloc(void *ptr, size_t size)
     if (ptr == NULL) {
         return gc_malloc(size);
     }
+    int old_size = mymalloc_usable_size(ptr);
     void *previous = PREVIOUS_POINTER(ptr);
     void *next = NEXT_POINTER(ptr);
     // if size request is 0, free block
@@ -311,7 +313,7 @@ void *gc_realloc(void *ptr, size_t size)
         NEXT_POINTER(ptr) = next;
         return NULL;
     }
-    memset(new, 0x0, INSERT_ADDRESS(new)-new); // zero out all bytes to prevent uninitialised address ghosting
+    memset(new+old_size, 0x0, INSERT_ADDRESS(new)-new-old_size); // zero out all bytes to prevent uninitialised address ghosting
     // set previous and next block pointers at end of larger block
     PREVIOUS_POINTER(new) = previous;
     NEXT_POINTER(new) = next;
@@ -334,34 +336,36 @@ void *gc_realloc(void *ptr, size_t size)
             new, mymalloc_usable_size(new), previous, next);
 
     /* Update bigallocation bitmap */
-    set_bit(pageindex[new>>12]);
+    bigalloc_bitmap_set(pageindex[PAGENUM(new)]);
 
     return new;
 }
 
-bool *points_to_heap_block(void *pointer)
+bool points_to_heap_object(void *pointer)
 {
-    if (get_bit(pageindex[pointer>>12]) == 1) {
+	if (IS_PLAUSIBLE_POINTER(pointer)) {
+    	if (bigalloc_bitmap_get(pageindex[PAGENUM(pointer)]) == 1) {
 
-        struct allocator *a = NULL;
-	    void *alloc_start = NULL;
-	    unsigned long alloc_size_bytes = 0;
-	    struct uniqtype *alloc_uniqtype = NULL;
-	    void *alloc_site = NULL;
+        	struct allocator *a = NULL;
+	    	void *alloc_start = NULL;
+	    	unsigned long alloc_size_bytes = 0;
+	    	struct uniqtype *alloc_uniqtype = NULL;
+	    	void *alloc_site = NULL;
 
-		__liballocs_get_alloc_info(pointer, // Don't care about error return type 
-			&a,
-			&alloc_start,
-			&alloc_size_bytes,
-			&alloc_uniqtype,
-			&alloc_site);
+			__liballocs_get_alloc_info(pointer, // Don't care about error return type 
+				&a,
+				&alloc_start,
+				&alloc_size_bytes,
+				&alloc_uniqtype,
+				&alloc_site);
         
-        /* Valid mymalloc pointer if allocator is generic_malloc and block has non-zero size */
-        /* Only care about pointers to start of chunk, user must have valid reference to alloc_start */
-        if (a == &__generic_malloc_allocator 
-            && alloc_size_bytes != 0 
-            && pointer == alloc_start) {
-            return true;
+        	/* Valid mymalloc pointer if allocator is generic_malloc and block has non-zero size */
+        	/* Only care about pointers to start of chunk, user must have valid reference to alloc_start */
+        	if (a == &__generic_malloc_allocator 
+            	&& alloc_size_bytes != 0 
+            	&& pointer == alloc_start) {
+            	return true;
+        	}
         }           
     }
     return false;
@@ -394,9 +398,9 @@ void scan_stack_for_pointers_to_heap(void)
 
     for (stack_walker; stack_walker<stack_base; stack_walker+=POINTER_SIZE) {
 		debug_print("stack address: %p\tpointer value: %p\n", stack_walker, *((void **) stack_walker));
-        if (points_to_heap_block(*((void **) stack_walker))) {
-            debug_print("Found pointer to heap block %p\n", *((void **) stack_walker)));
-            enqueue_heap_queue_node(*((void **) stack_walker)));
+        if (points_to_heap_object(*((void **) stack_walker))) {
+            debug_print("Found pointer to heap block %p\n", *((void **) stack_walker));
+            enqueue_heap_queue_node(*((void **) stack_walker));
         }
     }
     debug_print("Stack scan complete\n");
@@ -409,9 +413,9 @@ void scan_data_segment_for_pointers_to_heap(void)
 
     for (segment_walker; segment_walker<(void *)&edata; segment_walker+=POINTER_SIZE) {
         debug_print(".data walker address: %p\tpointer value: %p\n", segment_walker, *((void **) segment_walker));
-        if (points_to_heap_block(*((void **) segment_walker)) {
-            debug_print("Found pointer to heap block %p\n", *((void **) segment_walker)));
-            enqueue_heap_queue_node(*((void **) segment_walker)));
+        if (points_to_heap_object(*((void **) segment_walker))) {
+            debug_print("Found pointer to heap block %p\n", *((void **) segment_walker));
+            enqueue_heap_queue_node(*((void **) segment_walker));
         }
     }
     debug_print(".data scan complete\n");
@@ -424,12 +428,12 @@ void scan_bss_segment_for_pointers_to_heap(void)
 
     for (segment_walker; segment_walker<(void *)&end; segment_walker+=POINTER_SIZE) {
         debug_print(".bss walker address: %p\tpointer value: %p\n", segment_walker, *((void **) segment_walker));
-        if (points_to_heap_block(*((void **) segment_walker))) {
-            if (segment_walker == &heap_list_head && *((void **) segment_walker)) == heap_list_head) {
+        if (points_to_heap_object(*((void **) segment_walker))) {
+            if (segment_walker == &heap_list_head && *((void **) segment_walker) == heap_list_head) {
                 continue;
             }
-            debug_print("Found pointer to heap block %p\n", *((void **) segment_walker)));
-            enqueue_heap_queue_node(*((void **) segment_walker)));
+            debug_print("Found pointer to heap block %p\n", *((void **) segment_walker));
+            enqueue_heap_queue_node(*((void **) segment_walker));
         }
     }
     debug_print(".bss scan complete\n");
@@ -528,17 +532,13 @@ long GC_heap_size(void)
 	return get_heap_size();
 }
 
-static void set_bit(bigalloc_num_t index)
+static inline bool bigalloc_bitmap_get(unsigned long index)
 {
-    int array_index = index / sizeof(unsigned long);
-    unsigned long offset = index % sizeof(unsigned long);
-    big_allocation_bitmap[array_index] |= (1L << offset);
+	return bigalloc_bitmap[index / sizeof(unsigned long)] & (1ul << (index % sizeof(unsigned long)));
 }
 
-static unsigned long get_bit(bigalloc_num_t index)
+static inline void bigalloc_bitmap_set(unsigned long index)
 {
-    int array_index = index / sizeof(unsigned long);
-    unsigned long offset = index % sizeof(unsigned long);
-    return (big_allocation_bitmap[array_index] >> offset) & 1L;
+	bigalloc_bitmap[index / sizeof(unsigned long)] |= (1ul << (index % sizeof(unsigned long)));
 }
 
