@@ -36,7 +36,7 @@ void mark_block(void *block);
 void unmark_block(void *block);
 void *gc_malloc(size_t size);
 void *gc_realloc(void *ptr, size_t size);
-bool points_to_heap_object(void *pointer);
+bool valid_heap_object(void *pointer);
 void scan_stack_for_pointers_to_heap(void);
 void scan_data_segment_for_pointers_to_heap(void);
 void scan_bss_segment_for_pointers_to_heap(void);

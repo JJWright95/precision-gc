@@ -149,12 +149,10 @@ void process_heap_object_recursive(void *object, struct uniqtype *object_type)
 			void *pointed_to_object = *(void**)((char*) object + member_offset);
 			/* Check sanity of the pointer. We might be reading some union'd storage
 			 * that is currently holding a non-pointer. */
-            if ((pointed_to_object != NULL) && IS_PLAUSIBLE_POINTER(pointed_to_object)) {
-            	if (points_to_heap_object(pointed_to_object)) {
-                    /* add node to queue */
-				    enqueue_heap_queue_node(pointed_to_object);
-				    debug_print("Found heap object:\t%p\n", pointed_to_object);
-                }
+            if (valid_heap_object(pointed_to_object)) {
+                /* add node to queue */
+				enqueue_heap_queue_node(pointed_to_object);
+				debug_print("Found heap object:\t%p\n", pointed_to_object);
 			} else if (!pointed_to_object || pointed_to_object == (void *) -1) {
 				/* null pointer, do nothing */
 			} else {
@@ -341,7 +339,7 @@ void *gc_realloc(void *ptr, size_t size)
     return new;
 }
 
-bool points_to_heap_object(void *pointer)
+bool valid_heap_object(void *pointer)
 {
 	if (IS_PLAUSIBLE_POINTER(pointer)) {
     	if (bigalloc_bitmap_get(pageindex[PAGENUM(pointer)]) == 1) {
@@ -383,7 +381,7 @@ void scan_stack_for_pointers_to_heap(void)
 
     for (stack_walker; stack_walker<stack_base; stack_walker+=POINTER_SIZE) {
 		debug_print("stack address: %p\tpointer value: %p\n", stack_walker, *((void **) stack_walker));
-        if (points_to_heap_object(*((void **) stack_walker))) {
+        if (valid_heap_object(*((void **) stack_walker))) {
             debug_print("Found pointer to heap block %p\n", *((void **) stack_walker));
             enqueue_heap_queue_node(*((void **) stack_walker));
         }
@@ -398,7 +396,7 @@ void scan_data_segment_for_pointers_to_heap(void)
 
     for (segment_walker; segment_walker<(void *)&edata; segment_walker+=POINTER_SIZE) {
         debug_print(".data walker address: %p\tpointer value: %p\n", segment_walker, *((void **) segment_walker));
-        if (points_to_heap_object(*((void **) segment_walker))) {
+        if (valid_heap_object(*((void **) segment_walker))) {
             debug_print("Found pointer to heap block %p\n", *((void **) segment_walker));
             enqueue_heap_queue_node(*((void **) segment_walker));
         }
@@ -413,7 +411,7 @@ void scan_bss_segment_for_pointers_to_heap(void)
 
     for (segment_walker; segment_walker<(void *)&end; segment_walker+=POINTER_SIZE) {
         debug_print(".bss walker address: %p\tpointer value: %p\n", segment_walker, *((void **) segment_walker));
-        if (points_to_heap_object(*((void **) segment_walker))) {
+        if (valid_heap_object(*((void **) segment_walker))) {
             if (segment_walker == &heap_list_head && *((void **) segment_walker) == heap_list_head) {
                 continue;
             }
