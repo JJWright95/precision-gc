@@ -20,6 +20,8 @@ size_t mymalloc_usable_size(void*);
 #include "liballocs.h"
 #include "uniqtype.h"
 #include "uniqtype-defs.h"
+#include "pageindex.h"
+#include "vas.h"
 
 
 #ifdef DEBUG
@@ -85,7 +87,40 @@ void dequeue_heap_queue_node(void)
     }
 }
 
-#define IS_PLAUSIBLE_POINTER(p) (!(p) || ((p) == (void*) -1) || (((uintptr_t) (p)) >= 4194304 && ((uintptr_t) (p)) < 0x800000000000ul))
+// bigalloc linked-list data
+struct bigalloc_node {
+    unsigned long bigalloc_index;
+    struct bigalloc_node *next;
+};
+
+struct bigalloc_node *bigallocs_list = NULL;
+
+void new_bigalloc(void *pointer)
+{
+    if (!valid_bigalloc(pointer)) {
+    	struct bigalloc_node *node = __private_malloc(sizeof(struct bigalloc_node));
+    	node->bigalloc_index = pageindex[PAGENUM(pointer)];
+    	node->next = bigallocs_list;
+    	bigallocs_list = node;
+    }
+}
+
+#define IS_PLAUSIBLE_POINTER(p) (((uintptr_t) (p)) >= 4194304 && ((uintptr_t) (p)) < 0x800000000000ul)
+
+bool valid_bigalloc(void *pointer)
+{
+	unsigned long index = pageindex[PAGENUM(pointer)];
+	struct bigalloc_node *b = bigallocs_list;
+	while (b != NULL) {
+		if (index == b->bigalloc_index) {
+			return true;
+		}
+		b = b->next;
+	}
+	return false;
+}
+
+
 
 void process_heap_object_recursive(void *object, struct uniqtype *object_type)
 {
@@ -145,9 +180,8 @@ void process_heap_object_recursive(void *object, struct uniqtype *object_type)
 			void *pointed_to_object = *(void**)((char*) object + member_offset);
 			/* Check sanity of the pointer. We might be reading some union'd storage
 			 * that is currently holding a non-pointer. */
-            if ((pointed_to_object != NULL) && IS_PLAUSIBLE_POINTER(pointed_to_object)) {
-            	// FIXME: ask liballocs if pointer was handed back by mymalloc 
-				/* add node to queue */
+            if (valid_heap_object(pointed_to_object)) {
+                /* add node to queue */
 				enqueue_heap_queue_node(pointed_to_object);
 				debug_print("Found heap object:\t%p\n", pointed_to_object);
 			} else if (!pointed_to_object || pointed_to_object == (void *) -1) {
@@ -157,8 +191,8 @@ void process_heap_object_recursive(void *object, struct uniqtype *object_type)
 					pointed_to_object, i, object, NAME_FOR_UNIQTYPE(alloc_uniqtype));
 			}
 		} else if (UNIQTYPE_IS_COMPOSITE_TYPE(element_type)) { /* Else is it a thing with structure? If so, recurse. */
-			void * subobject_address = (void *) ((char *) object + member_offset);
-            process_heap_object_recursive(subobject_address, element_type); 
+			void *subobject_address = (void *) ((char *) object + member_offset);
+            process_heap_object_recursive(subobject_address, element_type);
 		}
 	}
 }
@@ -252,6 +286,10 @@ void *gc_malloc(size_t size)
     heap_list_head = block; // new block at beginning of linked list
     debug_print("Block allocated...\tAddress:%p\tSize: %zu\tPrevious: %p\tNext: %p\n", 
     		block, mymalloc_usable_size(block), PREVIOUS_POINTER(block), NEXT_POINTER(block));
+    
+    /* Update bigallocation list */
+	new_bigalloc(block);		
+    		
     return block;
 }
 
@@ -309,20 +347,39 @@ void *gc_realloc(void *ptr, size_t size)
     }
     debug_print("Block resized, moved to new location...\tAddress: %p\tSize: %zu\tPrevious: %p\tNext: %p\n",
             new, mymalloc_usable_size(new), previous, next);
+            
+    /* Update bigallocation list */
+	new_bigalloc(new); 
+     
     return new;
 }
 
-bool points_to_heap_object(void *pointer)
+bool valid_heap_object(void *pointer)
 {
-    void *heap_block = heap_list_head;
-    if (heap_block == NULL) {
-        return false;
-    }
-    while (heap_block != NULL) {
-        if (pointer == heap_block) {
-            return true;
-        }
-        heap_block = NEXT_POINTER(heap_block);
+	if (IS_PLAUSIBLE_POINTER(pointer)) {
+		if (valid_bigalloc(pointer)) {
+
+        	struct allocator *a = NULL;
+	    	void *alloc_start = NULL;
+	    	unsigned long alloc_size_bytes = 0;
+	    	struct uniqtype *alloc_uniqtype = NULL;
+	    	void *alloc_site = NULL;
+
+			__liballocs_get_alloc_info(pointer, // Don't care about error return type 
+				&a,
+				&alloc_start,
+				&alloc_size_bytes,
+				&alloc_uniqtype,
+				&alloc_site);
+        
+        	/* Valid mymalloc pointer if allocator is generic_malloc and block has non-zero size */
+        	/* Only care about pointers to start of chunk, user must have valid reference to alloc_start */
+        	if (a == &__generic_malloc_allocator 
+            	&& alloc_size_bytes != 0 
+            	&& pointer == alloc_start) {
+            	return true;
+        	}
+        }           
     }
     return false;
 }
@@ -339,7 +396,7 @@ void scan_stack_for_pointers_to_heap(void)
 
     for (stack_walker; stack_walker<stack_base; stack_walker+=POINTER_SIZE) {
 		debug_print("stack address: %p\tpointer value: %p\n", stack_walker, *((void **) stack_walker));
-        if (points_to_heap_object(*((void **) stack_walker))) {
+        if (valid_heap_object(*((void **) stack_walker))) {
             debug_print("Found pointer to heap block %p\n", *((void **) stack_walker));
             enqueue_heap_queue_node(*((void **) stack_walker));
         }
@@ -354,7 +411,7 @@ void scan_data_segment_for_pointers_to_heap(void)
 
     for (segment_walker; segment_walker<(void *)&edata; segment_walker+=POINTER_SIZE) {
         debug_print(".data walker address: %p\tpointer value: %p\n", segment_walker, *((void **) segment_walker));
-        if (points_to_heap_object(*((void **) segment_walker))) {
+        if (valid_heap_object(*((void **) segment_walker))) {
             debug_print("Found pointer to heap block %p\n", *((void **) segment_walker));
             enqueue_heap_queue_node(*((void **) segment_walker));
         }
@@ -369,7 +426,7 @@ void scan_bss_segment_for_pointers_to_heap(void)
 
     for (segment_walker; segment_walker<(void *)&end; segment_walker+=POINTER_SIZE) {
         debug_print(".bss walker address: %p\tpointer value: %p\n", segment_walker, *((void **) segment_walker));
-        if (points_to_heap_object(*((void **) segment_walker))) {
+        if (valid_heap_object(*((void **) segment_walker))) {
             if (segment_walker == &heap_list_head && *((void **) segment_walker) == heap_list_head) {
                 continue;
             }
