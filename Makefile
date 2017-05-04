@@ -17,7 +17,7 @@ LDLIBS += -lallocs \
 all: synth_mem_mine unit_test gc_bench
 
 mymalloc_usable_size.o: CC := cc
-mymalloc_usable_size.o: CFLAGS += -I$(LIBALLOCS)/include -std=c11
+mymalloc_usable_size.o: CFLAGS += -I$(LIBALLOCS)/include -std=c11 -g
 
 debug: CFLAGS += -g -DDEBUG
 debug: synth_mem_mine unit_test gc_bench
