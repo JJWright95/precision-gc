@@ -1215,7 +1215,7 @@ static struct malloc_state _gm_;
 /* Determines the fraction by which the heap is to be extened on sys_alloc */
 
 #ifndef FSD
-#define FSD 4
+#define FSD 3
 #endif
 
 /* -------------------------- system alloc setup ------------------------- */
