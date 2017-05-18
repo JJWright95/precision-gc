@@ -14,6 +14,8 @@ LDLIBS += -lallocs \
 
 #        -Wl,--defsym,__wrap_gc_malloc=__real_gc_malloc
 
+LIBS += -lpthread -lrt
+
 all: synth_mem_mine unit_test gc_bench
 
 mymalloc_usable_size.o: CC := cc
@@ -25,7 +27,7 @@ debug: synth_mem_mine unit_test gc_bench
 	-ex "handle SIGILL nostop noprint pass" gc_bench
 
 synth_mem_mine: synth_mem_mine.o gc.o mymalloc_hooks.o mymalloc.a mymalloc_usable_size.o
-	$(CC) $(CFLAGS) -o "$@" $(filter-out mymalloc.a,$+) -Wl,--whole-archive $(filter mymalloc.a,$+) -Wl,--no-whole-archive $(LDFLAGS) $(LDLIBS) -O2
+	$(CC) $(CFLAGS) -o "$@" $(filter-out mymalloc.a,$+) -Wl,--whole-archive $(filter mymalloc.a,$+) -Wl,--no-whole-archive $(LDFLAGS) $(LDLIBS) $(LIBS) -O2
 synth_mem_mine: LDFLAGS += \
 	-Wl,--wrap,__real_mymalloc \
 	-Wl,--wrap,__real_mycalloc \
@@ -38,7 +40,7 @@ synth_mem_mine: LDFLAGS += \
 	#-Wl,test.lds \
 	
 gc_bench: GCBench.o gc.o mymalloc_hooks.o mymalloc.a mymalloc_usable_size.o
-	$(CC) $(CFLAGS) -o "$@" $(filter-out mymalloc.a,$+) -Wl,--whole-archive $(filter mymalloc.a,$+) -Wl,--no-whole-archive $(LDFLAGS) $(LDLIBS) -O2
+	$(CC) $(CFLAGS) -o "$@" $(filter-out mymalloc.a,$+) -Wl,--whole-archive $(filter mymalloc.a,$+) -Wl,--no-whole-archive $(LDFLAGS) $(LDLIBS) $(LIBS) -O2
 gc_bench: LDFLAGS += \
 	-Wl,--wrap,__real_mymalloc \
 	-Wl,--wrap,__real_mycalloc \
@@ -60,7 +62,7 @@ mymalloc.a: mymalloc.o
 	$(AR) r "$@" $+
 
 unit_test: unit_tester.o gc.o mymalloc_hooks.o mymalloc.a mymalloc_usable_size.o
-	$(CC) $(CFLAGS) -o "$@" $(filter-out mymalloc.a,$+) -Wl,--whole-archive $(filter mymalloc.a,$+) -Wl,--no-whole-archive $(LDFLAGS) $(LDLIBS) -O2
+	$(CC) $(CFLAGS) -o "$@" $(filter-out mymalloc.a,$+) -Wl,--whole-archive $(filter mymalloc.a,$+) -Wl,--no-whole-archive $(LDFLAGS) $(LDLIBS) $(LIBS) -O2
 #unit_test: LDLIBS += gc.o mymalloc.o
 unit_test: LDFLAGS += \
 	-Wl,--wrap,__real_mymalloc \
@@ -77,7 +79,7 @@ unit_test: LDFLAGS += \
 unit_tester.o: gc.h
 
 gc.o: gc.h
-	$(CC) $(CFLAGS) -c gc.c -O2
+	$(CC) $(CFLAGS) -c gc.c $(LIBS) -O2
 
 dlmalloc.o: dlmalloc.h
 	$(CC) $(CFLAGS) -c dlmalloc.c -DUSE_DL_PREFIX -DDEFAULT_TRIM_THRESHOLD=MAX_SIZE_T -DDEFAULT_MMAP_THRESHOLD=MAX_SIZE_T -DHAVE_REMAP=0 -DHAVE_MORECORE=0 -O2
