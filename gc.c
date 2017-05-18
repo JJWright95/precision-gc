@@ -408,6 +408,108 @@ bool valid_heap_object(void *pointer)
     return false;
 }
 
+void scan_registers_for_pointers_to_heap(void)
+{
+	void *rax;
+	void *rbx;
+	void *rcx;
+	void *rdx;
+	void *rbp;
+	void *rsp;
+	void *rsi;
+	void *rdi; 
+	void *r8;
+	void *r9;
+	void *r10;
+	void *r11;
+	void *r12;
+	void *r13;
+	void *r14;
+	void *r15;
+	
+	asm volatile ("movq %%rax, %0" : "=r" (rax));
+	asm volatile ("movq %%rbx, %0" : "=r" (rbx));
+	asm volatile ("movq %%rcx, %0" : "=r" (rcx));
+	asm volatile ("movq %%rdx, %0" : "=r" (rdx));
+	asm volatile ("movq %%rbp, %0" : "=r" (rbp));
+	asm volatile ("movq %%rsp, %0" : "=r" (rsp));
+	asm volatile ("movq %%rsi, %0" : "=r" (rsi));
+	asm volatile ("movq %%rdi, %0" : "=r" (rdi));
+	asm volatile ("movq %%r8, %0" : "=r" (r8));
+	asm volatile ("movq %%r9, %0" : "=r" (r9));
+	asm volatile ("movq %%r10, %0" : "=r" (r10));
+	asm volatile ("movq %%r11, %0" : "=r" (r11));
+	asm volatile ("movq %%r12, %0" : "=r" (r12));
+	asm volatile ("movq %%r13, %0" : "=r" (r13));
+	asm volatile ("movq %%r14, %0" : "=r" (r14));
+	asm volatile ("movq %%r15, %0" : "=r" (r15));
+	
+	if (valid_heap_object(rax)) {
+    	debug_print("Found pointer to heap block %p\n", rax);
+        enqueue_heap_queue_node(rax);
+    }
+    if (valid_heap_object(rbx)) {
+    	debug_print("Found pointer to heap block %p\n", rbx);
+        enqueue_heap_queue_node(rbx);
+    }
+    if (valid_heap_object(rcx)) {
+    	debug_print("Found pointer to heap block %p\n", rcx);
+        enqueue_heap_queue_node(rcx);
+    }
+    if (valid_heap_object(rdx)) {
+    	debug_print("Found pointer to heap block %p\n", rdx);
+        enqueue_heap_queue_node(rdx);
+    }
+    if (valid_heap_object(rbp)) {
+    	debug_print("Found pointer to heap block %p\n", rbp);
+        enqueue_heap_queue_node(rbp);
+    }
+    if (valid_heap_object(rsp)) {
+    	debug_print("Found pointer to heap block %p\n", rsp);
+        enqueue_heap_queue_node(rsp);
+    }
+    if (valid_heap_object(rsi)) {
+    	debug_print("Found pointer to heap block %p\n", rsi);
+        enqueue_heap_queue_node(rsi);
+    }
+    if (valid_heap_object(rdi)) {
+    	debug_print("Found pointer to heap block %p\n", rdi);
+        enqueue_heap_queue_node(rdi);
+    }
+    if (valid_heap_object(r8)) {
+    	debug_print("Found pointer to heap block %p\n", r8);
+        enqueue_heap_queue_node(r8);
+    }
+    if (valid_heap_object(r9)) {
+    	debug_print("Found pointer to heap block %p\n", r9);
+        enqueue_heap_queue_node(r9);
+    }
+    if (valid_heap_object(r10)) {
+    	debug_print("Found pointer to heap block %p\n", r10);
+        enqueue_heap_queue_node(r10);
+    }
+    if (valid_heap_object(r11)) {
+    	debug_print("Found pointer to heap block %p\n", r11);
+        enqueue_heap_queue_node(r11);
+    }
+    if (valid_heap_object(r12)) {
+    	debug_print("Found pointer to heap block %p\n", r12);
+        enqueue_heap_queue_node(r12);
+    }
+    if (valid_heap_object(r13)) {
+    	debug_print("Found pointer to heap block %p\n", r13);
+        enqueue_heap_queue_node(r13);
+    }
+    if (valid_heap_object(r14)) {
+    	debug_print("Found pointer to heap block %p\n", r14);
+        enqueue_heap_queue_node(r14);
+    }
+    if (valid_heap_object(r15)) {
+    	debug_print("Found pointer to heap block %p\n", r15);
+        enqueue_heap_queue_node(r15);
+    }
+}
+
 void scan_stack_for_pointers_to_heap(void)
 {
     void *stack_pointer;
@@ -520,6 +622,7 @@ void gc_collect(void)
     assert(q_head == NULL);
     assert(q_tail == NULL);
 
+	scan_registers_for_pointers_to_heap();
     scan_stack_for_pointers_to_heap();
     scan_data_segment_for_pointers_to_heap();
     scan_bss_segment_for_pointers_to_heap();
