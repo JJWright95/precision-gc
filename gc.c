@@ -8,6 +8,7 @@
 #include <limits.h>
 #include <string.h>
 #include <fcntl.h>
+#include <semaphore.h>
 
 #include "heap_index.h"
 #include "gc.h"
@@ -36,6 +37,9 @@ extern long get_heap_size(void);
 static int num_collections = 0; 
 extern bool GC_running;
 bool GC_initialised = false;
+
+/* semaphore to enforce exclusive access to gc_malloc allocator. */
+sem_t allocator_mutex;
 
 /* Private liballocs allocator for GC helper structures. */
 extern void *__private_malloc(size_t size);
@@ -240,6 +244,10 @@ void gc_init(void)
     /* Convert address string to base 10 digits. */
     stack_base = (void *) strtoull(&stat_buf[buf_offset], NULL, 10);
     assert((uintptr_t) stack_base > 0x100000 && ((uintptr_t) stack_base & (sizeof(void *)-1)) == 0);
+    
+    /* Initialise semaphore for exclusive access to allocator gc_malloc*/
+    int err = sem_init(&allocator_mutex, 0, 1);
+    assert(err == 0);
     GC_initialised = true;
     debug_print("Base of stack: %p\n", stack_base);
 }
@@ -270,6 +278,8 @@ void unmark_block(void *block)
 extern void *__mymalloc_lowest, *__mymalloc_highest;
 void *gc_malloc(size_t size)
 {
+	int err = sem_wait(&allocator_mutex);
+	assert(err == 0);
     void *block = mymalloc(size);
     if (block == NULL) {
         debug_print("Malloc failure...\tSize request: %zu\n", size);
@@ -289,7 +299,9 @@ void *gc_malloc(size_t size)
     
     /* Update bigallocation list */
 	new_bigalloc(block);		
-    		
+   	
+   	err = sem_post(&allocator_mutex);
+   	assert(err == 0);
     return block;
 }
 
@@ -298,6 +310,10 @@ void *gc_realloc(void *ptr, size_t size)
     if (ptr == NULL) {
         return gc_malloc(size);
     }
+    
+    int err = sem_wait(&allocator_mutex);
+	assert(err == 0);
+	
     void *previous = PREVIOUS_POINTER(ptr);
     void *next = NEXT_POINTER(ptr);
     // if size request is 0, free block
@@ -312,6 +328,8 @@ void *gc_realloc(void *ptr, size_t size)
             PREVIOUS_POINTER(next) = previous;
         }
         myfree(ptr);
+        err = sem_post(&allocator_mutex);
+   		assert(err == 0);
         return NULL;
     }
     // clear previous and next pointers in original, small block
@@ -324,6 +342,8 @@ void *gc_realloc(void *ptr, size_t size)
         debug_print("Realloc failure...\tPointer: %p\tSize request: %zu\n", ptr, size);
         PREVIOUS_POINTER(ptr) = previous;
         NEXT_POINTER(ptr) = next;
+        err = sem_post(&allocator_mutex);
+   		assert(err == 0);
         return NULL;
     }
     memset(new, 0x0, INSERT_ADDRESS(new)-new); // zero out all bytes to prevent uninitialised address ghosting
@@ -334,6 +354,8 @@ void *gc_realloc(void *ptr, size_t size)
     if (ptr == new) {
         debug_print("Block resized in place...\tAddress: %p\tSize: %zu\tPrevious: %p\tNext: %p\n",
                 ptr, mymalloc_usable_size(new), previous, next);
+        err = sem_post(&allocator_mutex);
+   		assert(err == 0);
         return ptr;
     }
     // if get here, data has been moved. Update previous and next block pointers
@@ -350,7 +372,9 @@ void *gc_realloc(void *ptr, size_t size)
             
     /* Update bigallocation list */
 	new_bigalloc(new); 
-     
+	
+    err = sem_post(&allocator_mutex);
+   	assert(err == 0); 
     return new;
 }
 
