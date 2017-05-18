@@ -213,7 +213,6 @@ void init_stack_base(void)
     /* Convert address string to base 10 digits. */
     stack_base = (void *) strtoull(&stat_buf[buf_offset], NULL, 10);
     assert((uintptr_t) stack_base > 0x100000 && ((uintptr_t) stack_base & (sizeof(void *)-1)) == 0);
-<<<<<<< HEAD
 }
 
 void init_bigalloc_bitmap(void)
@@ -228,12 +227,9 @@ void gc_init(void)
 {
     init_stack_base();
     init_bigalloc_bitmap();
-=======
-    
     /* Initialise semaphore for exclusive access to allocator gc_malloc*/
     int err = sem_init(&allocator_mutex, 0, 1);
     assert(err == 0);
->>>>>>> c18ff87... Added semaphore to enforce mutual exclusion in gc_malloc allocator
     GC_initialised = true;
     debug_print("Base of stack: %p\n", stack_base); 
 }
@@ -283,19 +279,12 @@ void *gc_malloc(size_t size)
     heap_list_head = block; // new block at beginning of linked list
     debug_print("Block allocated...\tAddress: %p\tSize: %zu\tPrevious: %p\tNext: %p\n", 
     		block, mymalloc_usable_size(block), PREVIOUS_POINTER(block), NEXT_POINTER(block));
-<<<<<<< HEAD
 
     /* Update bigallocation bitmap */
-    bigalloc_bitmap_set(pageindex[PAGENUM(block)]); // PAGENUM defined in vas.h
-
-=======
-    
-    /* Update bigallocation list */
-	new_bigalloc(block);		
+    bigalloc_bitmap_set(pageindex[PAGENUM(block)]); // PAGENUM defined in vas.h		
    	
    	err = sem_post(&allocator_mutex);
    	assert(err == 0);
->>>>>>> c18ff87... Added semaphore to enforce mutual exclusion in gc_malloc allocator
     return block;
 }
 
@@ -304,14 +293,11 @@ void *gc_realloc(void *ptr, size_t size)
     if (ptr == NULL) {
         return gc_malloc(size);
     }
-<<<<<<< HEAD
     int old_size = mymalloc_usable_size(ptr);
-=======
     
     int err = sem_wait(&allocator_mutex);
 	assert(err == 0);
 	
->>>>>>> c18ff87... Added semaphore to enforce mutual exclusion in gc_malloc allocator
     void *previous = PREVIOUS_POINTER(ptr);
     void *next = NEXT_POINTER(ptr);
     // if size request is 0, free block
@@ -367,19 +353,12 @@ void *gc_realloc(void *ptr, size_t size)
     }
     debug_print("Block resized, moved to new location...\tAddress: %p\tSize: %zu\tPrevious: %p\tNext: %p\n",
             new, mymalloc_usable_size(new), previous, next);
-<<<<<<< HEAD
 
     /* Update bigallocation bitmap */
     bigalloc_bitmap_set(pageindex[PAGENUM(new)]);
-
-=======
-            
-    /* Update bigallocation list */
-	new_bigalloc(new); 
 	
     err = sem_post(&allocator_mutex);
    	assert(err == 0); 
->>>>>>> c18ff87... Added semaphore to enforce mutual exclusion in gc_malloc allocator
     return new;
 }
 
